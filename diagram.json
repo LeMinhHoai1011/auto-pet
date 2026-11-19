@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "author": "Nhom 18 - De tai 7",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 0, "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-a4988",
+      "id": "drv",
+      "top": -220, "left": 200,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-stepper-motor",
+      "id": "motor",
+      "top": -220, "left": 380,
+      "attrs": { "display": "steps", "size": "17" }
+    },
+    {
+      "type": "wokwi-hx711",
+      "id": "hx711",
+      "top": 240, "left": -260,
+      "attrs": { "type": "5kg" }
+    },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "ultrasonic",
+      "top": -220, "left": -260,
+      "attrs": { "distance": "10" }
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht22",
+      "top": 240, "left": 220,
+      "attrs": { "humidity": "50", "temperature": "25" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn",
+      "top": 400, "left": -100,
+      "attrs": { "color": "green" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzer",
+      "top": 400, "left": 60,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led",
+      "top": 400, "left": 220,
+      "attrs": { "color": "blue" }
+    },
+    {
+      "type": "wokwi-ssd1306",
+      "id": "oled",
+      "top": -220, "left": -80,
+      "attrs": { "i2cAddress": "0x3c" }
+    },
+    {
+      "type": "wokwi-ds1307",
+      "id": "rtc",
+      "top": -220, "left": 60,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    ["esp:TX0",  "$serialMonitor:RX", "", []],
+    ["esp:RX0",  "$serialMonitor:TX", "", []],
+
+    ["esp:D13",   "drv:STEP",         "green",   []],
+    ["esp:D27",   "drv:DIR",          "blue",    []],
+    ["esp:D25",   "drv:ENABLE",       "yellow",  []],
+    ["esp:3V3",   "drv:VDD",          "red",     []],
+    ["esp:GND.1", "drv:GND",          "black",   []],
+    ["drv:RESET", "drv:SLEEP",        "gray",    []],
+
+    ["drv:1A",    "motor:B+",         "orange",  []],
+    ["drv:1B",    "motor:B-",         "orange",  []],
+    ["drv:2A",    "motor:A+",         "orange",  []],
+    ["drv:2B",    "motor:A-",         "orange",  []],
+
+    ["esp:3V3",   "hx711:VCC",        "red",     []],
+    ["esp:GND.1", "hx711:GND",        "black",   []],
+    ["esp:RX2",   "hx711:DT",         "green",   []],
+    ["esp:D4",    "hx711:SCK",        "blue",    []],
+
+    ["esp:3V3",   "ultrasonic:VCC",   "red",     []],
+    ["esp:GND.1", "ultrasonic:GND",   "black",   []],
+    ["esp:D5",    "ultrasonic:TRIG",  "green",   []],
+    ["esp:D18",   "ultrasonic:ECHO",  "blue",    []],
+
+    ["esp:3V3",   "dht22:VCC",        "red",     []],
+    ["esp:GND.2", "dht22:GND",        "black",   []],
+    ["esp:D15",   "dht22:SDA",        "green",   []],
+
+    ["esp:D32",   "btn:1.l",          "green",   []],
+    ["esp:GND.2", "btn:2.l",          "black",   []],
+
+    ["esp:D23",   "buzzer:1",         "orange",  []],
+    ["esp:GND.2", "buzzer:2",         "black",   []],
+
+    ["esp:D2",    "led:A",            "blue",    []],
+    ["esp:GND.2", "led:C",            "black",   []],
+
+    ["esp:D21",   "oled:SDA",         "blue",    []],
+    ["esp:D22",   "oled:SCL",         "yellow",  []],
+    ["esp:3V3",   "oled:VCC",         "red",     []],
+    ["esp:GND.1", "oled:GND",         "black",   []],
+
+    ["esp:D21",   "rtc:SDA",          "blue",    []],
+    ["esp:D22",   "rtc:SCL",          "yellow",  []],
+    ["esp:3V3",   "rtc:VCC",          "red",     []],
+    ["esp:GND.1", "rtc:GND",          "black",   []]
+  ]
+}

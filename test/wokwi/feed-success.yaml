@@ -1,0 +1,36 @@
+name: Manual feed with simulated food falling onto HX711
+version: 1
+author: Pet Feeder
+steps:
+  - set-control:
+      part-id: hx711
+      name: load
+      value: 0
+  - wait-serial: '[BOOT] Ready'
+  - delay: 5s
+  - set-control:
+      part-id: btn
+      name: pressed
+      value: 1
+  - delay: 200ms
+  - set-control:
+      part-id: btn
+      name: pressed
+      value: 0
+  - wait-serial: '[TEST] HX711 ready'
+  - delay: 5s
+  - set-control:
+      part-id: hx711
+      name: load
+      value: 0.01
+  - delay: 3s
+  - set-control:
+      part-id: hx711
+      name: load
+      value: 0.02
+  - delay: 3s
+  - set-control:
+      part-id: hx711
+      name: load
+      value: 0.04
+  - wait-serial: '"type":"fed"'

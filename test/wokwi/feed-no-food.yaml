@@ -1,0 +1,24 @@
+name: No food must stop the motor and report bridge
+version: 1
+author: Pet Feeder
+steps:
+  - set-control:
+      part-id: hx711
+      name: load
+      value: 0
+  - wait-serial: '[BOOT] Ready'
+  - delay: 5s
+  - set-control:
+      part-id: btn
+      name: pressed
+      value: 1
+  - delay: 200ms
+  - set-control:
+      part-id: btn
+      name: pressed
+      value: 0
+  - wait-serial: '"type":"bridge"'
+  - expect-pin:
+      part-id: esp
+      name: '25'
+      value: 1

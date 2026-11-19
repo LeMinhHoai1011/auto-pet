@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pet Feeder Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f6f7f9;
+  --bg-card: #ffffff;
+  --fg: #1a1d23;
+  --fg-muted: #6b7280;
+  --border: #e2e5ea;
+  --accent: #3b82f6;
+  --accent-light: #dbeafe;
+  --ok: #10b981;
+  --ok-light: #d1fae5;
+  --warn: #f59e0b;
+  --warn-light: #fef3c7;
+  --bad: #ef4444;
+  --bad-light: #fee2e2;
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1117;
+    --bg-card: #1a1d27;
+    --fg: #e8eaed;
+    --fg-muted: #9ca3af;
+    --border: #2d3140;
+    --accent: #60a5fa;
+    --accent-light: #1e3a5f;
+    --ok: #34d399;
+    --ok-light: #064e3b;
+    --warn: #fbbf24;
+    --warn-light: #78350f;
+    --bad: #f87171;
+    --bad-light: #7f1d1d;
+    --chart-1: #60a5fa;
+    --chart-2: #34d399;
+    --chart-3: #fbbf24;
+    --chart-4: #a78bfa;
+    --shadow: 0 1px 3px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1117;
+  --bg-card: #1a1d27;
+  --fg: #e8eaed;
+  --fg-muted: #9ca3af;
+  --border: #2d3140;
+  --accent: #60a5fa;
+  --accent-light: #1e3a5f;
+  --ok: #34d399;
+  --ok-light: #064e3b;
+  --warn: #fbbf24;
+  --warn-light: #78350f;
+  --bad: #f87171;
+  --bad-light: #7f1d1d;
+  --chart-1: #60a5fa;
+  --chart-2: #34d399;
+  --chart-3: #fbbf24;
+  --chart-4: #a78bfa;
+  --shadow: 0 1px 3px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+  padding: 16px;
+  min-height: 100vh;
+}
+.wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+/* Header */
+.header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.header h1 { font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; flex: 1; min-width: 200px; }
+.status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 5px 14px; border-radius: 999px; }
+.status-online { background: var(--ok-light); color: var(--ok); }
+.status-offline { background: var(--bad-light); color: var(--bad); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; }
+.status-online .status-dot { background: var(--ok); animation: pulse 2s infinite; }
+.status-offline .status-dot { background: var(--bad); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+.last-update { font-size: 12px; color: var(--fg-muted); }
+
+/* Tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.tile { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px; }
+.tile-label { font-size: 12px; font-weight: 500; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .05em; }
+.tile-value { font-family: 'Space Grotesk', sans-serif; font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile-unit { font-size: 12px; color: var(--fg-muted); }
+.tile-value.ok { color: var(--ok); }
+.tile-value.warn { color: var(--warn); }
+.tile-value.bad { color: var(--bad); }
+
+/* Controls */
+.controls { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; transition: opacity .15s; }
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-secondary { background: var(--bg-card); color: var(--fg); border: 1px solid var(--border); }
+.feed-input { width: 70px; padding: 8px 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--fg); font-variant-numeric: tabular-nums; }
+.feed-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+/* Cards */
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.card h2 { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 14px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+/* Chart */
+.chart-box { width: 100%; min-height: 200px; position: relative; }
+.chart-box canvas { width: 100% !important; height: 200px !important; }
+
+/* Legend */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--fg-muted); margin-bottom: 10px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; vertical-align: middle; margin-right: 4px; }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 600; font-size: 11px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .04em; padding: 8px 10px; border-bottom: 2px solid var(--border); }
+td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge-ok { background: var(--ok-light); color: var(--ok); }
+.badge-warn { background: var(--warn-light); color: var(--warn); }
+.badge-bad { background: var(--bad-light); color: var(--bad); }
+
+/* Schedule */
+.sched-row { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.sched-row:last-child { border-bottom: none; }
+.sched-time { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; min-width: 75px; font-variant-numeric: tabular-nums; }
+.sched-grams { font-size: 14px; color: var(--fg-muted); flex: 1; }
+
+/* Loading */
+.loading { text-align: center; padding: 40px; color: var(--fg-muted); }
+.spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; margin-bottom: 8px; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* Toast */
+.toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #fff; z-index: 100; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.toast-ok { background: var(--ok); }
+.toast-err { background: var(--bad); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="header">
+    <h1>&#128062; Pet Feeder</h1>
+    <span id="status-pill" class="status-pill status-offline">
+      <span class="status-dot"></span>
+      <span id="status-text">Đang kết nối...</span>
+    </span>
+    <span id="last-update" class="last-update"></span>
+  </header>
+
+  <!-- KPI Tiles -->
+  <div class="tiles">
+    <div class="tile">
+      <span class="tile-label">Bát thức ăn</span>
+      <span class="tile-value" id="t-bowl">—</span>
+      <span class="tile-unit">grams</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Phễu còn</span>
+      <span class="tile-value" id="t-hopper">—</span>
+      <span class="tile-unit">%</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Nhiệt độ</span>
+      <span class="tile-value" id="t-temp">—</span>
+      <span class="tile-unit">°C</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Độ ẩm</span>
+      <span class="tile-value" id="t-hum">—</span>
+      <span class="tile-unit">%</span>
+    </div>
+    <div class="tile">
+      <span class="tile-label">Độ ôi thiu</span>
+      <span class="tile-value" id="t-stale">—</span>
+      <span class="tile-unit">điểm</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-primary" id="btn-feed" onclick="doFeed()">Cho ăn</button>
+    <input type="number" class="feed-input" id="feed-grams" value="30" min="5" max="100" step="5">
+    <span class="tile-unit" style="align-self:center">grams</span>
+    <button class="btn btn-secondary" id="btn-tare" onclick="doTare()">Tare cân</button>
+    <button class="btn btn-secondary" onclick="refreshAll()">&#x21bb; Làm mới</button>
+  </div>
+
+  <!-- Feeding History Chart -->
+  <div class="card">
+    <h2>Lịch sử cho ăn</h2>
+    <div class="legend">
+      <span><span class="legend-dot" style="background:var(--chart-1)"></span> Lịch</span>
+      <span><span class="legend-dot" style="background:var(--chart-2)"></span> Tay</span>
+      <span><span class="legend-dot" style="background:var(--chart-3)"></span> Camera</span>
+      <span><span class="legend-dot" style="background:var(--chart-4)"></span> Lỗi</span>
+    </div>
+    <div class="chart-box"><canvas id="chart-feed"></canvas></div>
+  </div>
+
+  <div class="two-col">
+    <!-- Weight Chart -->
+    <div class="card">
+      <h2>Cân nặng bát (24h)</h2>
+      <div class="chart-box"><canvas id="chart-weight"></canvas></div>
+    </div>
+    <!-- Env Chart -->
+    <div class="card">
+      <h2>Nhiệt độ &amp; Độ ẩm</h2>
+      <div class="chart-box"><canvas id="chart-env"></canvas></div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <!-- Alerts -->
+    <div class="card">
+      <h2>Cảnh báo</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Thời gian</th><th>Loại</th><th>Nội dung</th><th>Trạng thái</th></tr></thead>
+          <tbody id="alerts-body"><tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Schedule -->
+    <div class="card">
+      <h2>Lịch cho ăn</h2>
+      <div id="schedule-list"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(function(){
+  const API = '';
+  let feedChart, weightChart, envChart;
+  let refreshTimer;
+
+  async function api(path) {
+    const r = await fetch(API + path);
+    if (!r.ok) throw new Error(r.status + '');
+    return r.json();
+  }
+  async function apiPost(path, body) {
+    const r = await fetch(API + path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
+    return r.json();
+  }
+
+  function toast(msg, ok) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast show ' + (ok ? 'toast-ok' : 'toast-err');
+    setTimeout(() => el.className = 'toast', 3000);
+  }
+
+  function fmt(d) {
+    if (!d) return '—';
+    const dt = new Date(d);
+    return dt.toLocaleString('vi-VN', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }
+
+  function tileColor(val, low, high) {
+    if (val <= low) return 'bad';
+    if (val <= high) return 'warn';
+    return 'ok';
+  }
+
+  // ── Device Status ──
+  async function loadDevice() {
+    try {
+      const d = await api('/api/device/status');
+      if (!d) {
+        document.getElementById('status-pill').className = 'status-pill status-offline';
+        document.getElementById('status-text').textContent = 'Chưa có dữ liệu';
+        document.getElementById('last-update').textContent = 'Server chưa nhận trạng thái ESP32 qua MQTT. Gửi lệnh thành công chưa xác nhận máy đã nhận.';
+        return;
+      }
+      const online = d.online;
+      document.getElementById('status-pill').className = 'status-pill ' + (online ? 'status-online' : 'status-offline');
+      document.getElementById('status-text').textContent = online ? 'Online' : 'Offline';
+
+      const bowl = document.getElementById('t-bowl');
+      bowl.textContent = d.bowl_grams.toFixed(0);
+      bowl.className = 'tile-value ' + tileColor(d.bowl_grams, 5, 15);
+
+      const hop = document.getElementById('t-hopper');
+      hop.textContent = d.hopper_pct;
+      hop.className = 'tile-value ' + tileColor(d.hopper_pct, 15, 30);
+
+      document.getElementById('t-temp').textContent = d.temperature.toFixed(1);
+      document.getElementById('t-hum').textContent = d.humidity.toFixed(0);
+
+      const stale = document.getElementById('t-stale');
+      stale.textContent = d.stale_score.toFixed(1);
+      stale.className = 'tile-value ' + (d.stale_score > 7 ? 'bad' : d.stale_score > 4 ? 'warn' : 'ok');
+
+      document.getElementById('last-update').textContent = 'Cập nhật: ' + fmt(d.updated_at);
+    } catch(e) {
+      document.getElementById('status-pill').className = 'status-pill status-offline';
+      document.getElementById('status-text').textContent = 'Mất kết nối';
+    }
+  }
+
+  // ── Feeding History ──
+  async function loadFeedHistory() {
+    try {
+      const rows = await api('/api/feed/history?limit=100');
+      const byDate = {};
+      rows.forEach(r => {
+        const day = r.created_at.slice(0,10);
+        if (!byDate[day]) byDate[day] = {schedule:0, manual:0, vision:0, fail:0};
+        if (r.result !== 'OK') byDate[day].fail += r.actual_grams;
+        else byDate[day][r.source] = (byDate[day][r.source]||0) + r.actual_grams;
+      });
+      const days = Object.keys(byDate).sort().slice(-7);
+      const cs = getComputedStyle(document.documentElement);
+      const c1 = cs.getPropertyValue('--chart-1').trim();
+      const c2 = cs.getPropertyValue('--chart-2').trim();
+      const c3 = cs.getPropertyValue('--chart-3').trim();
+      const c4 = cs.getPropertyValue('--chart-4').trim();
+
+      const cfg = {
+        type: 'bar',
+        data: {
+          labels: days.map(d => d.slice(5)),
+          datasets: [
+            {label:'Lịch', data: days.map(d => byDate[d].schedule), backgroundColor: c1, borderRadius: 3},
+            {label:'Tay', data: days.map(d => byDate[d].manual), backgroundColor: c2, borderRadius: 3},
+            {label:'Camera', data: days.map(d => byDate[d].vision), backgroundColor: c3, borderRadius: 3},
+            {label:'Lỗi', data: days.map(d => byDate[d].fail), backgroundColor: c4, borderRadius: 3},
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {legend:{display:false}, tooltip:{mode:'index',intersect:false}},
+          scales: {
+            x: {stacked:true, grid:{display:false}, ticks:{color: cs.getPropertyValue('--fg-muted').trim()}},
+            y: {stacked:true, beginAtZero:true, grid:{color: cs.getPropertyValue('--border').trim()}, ticks:{color: cs.getPropertyValue('--fg-muted').trim()}}
+          }
+        }
+      };
+      if (feedChart) feedChart.destroy();
+      feedChart = new Chart(document.getElementById('chart-feed'), cfg);
+    } catch(e) {}
+  }
+
+  // ── Weight Chart ──
+  async function loadWeight() {
+    try {
+      const rows = await api('/api/sensors/?sensor_type=weight&limit=50');
+      const sorted = rows.reverse();
+      const cs = getComputedStyle(document.documentElement);
+      const c1 = cs.getPropertyValue('--chart-1').trim();
+      const cfg = {
+        type: 'line',
+        data: {
+          labels: sorted.map(r => new Date(r.created_at).toLocaleTimeString('vi',{hour:'2-digit',minute:'2-digit'})),
+          datasets: [{
+            label: 'Bát (g)',
+            data: sorted.map(r => r.value),
+            borderColor: c1,
+            backgroundColor: c1 + '22',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {legend:{display:false}},
+          scales: {
+            x: {grid:{display:false}, ticks:{color: cs.getPropertyValue('--fg-muted').trim(), maxTicksLimit:8}},
+            y: {beginAtZero:true, grid:{color: cs.getPropertyValue('--border').trim()}, ticks:{color: cs.getPropertyValue('--fg-muted').trim()}}
+          }
+        }
+      };
+      if (weightChart) weightChart.destroy();
+      weightChart = new Chart(document.getElementById('chart-weight'), cfg);
+    } catch(e) {}
+  }
+
+  // ── Env Chart ──
+  async function loadEnv() {
+    try {
+      const [tempData, humData] = await Promise.all([
+        api('/api/sensors/?sensor_type=temperature&limit=24'),
+        api('/api/sensors/?sensor_type=humidity&limit=24')
+      ]);
+      const rows = [...tempData, ...humData];
+      const tempRows = rows.filter(r => r.sensor_type === 'temperature').reverse();
+      const humRows = rows.filter(r => r.sensor_type === 'humidity').reverse();
+      const cs = getComputedStyle(document.documentElement);
+      const c1 = cs.getPropertyValue('--chart-1').trim();
+      const c2 = cs.getPropertyValue('--chart-2').trim();
+      const labels = tempRows.map(r => new Date(r.created_at).toLocaleTimeString('vi',{hour:'2-digit',minute:'2-digit'}));
+      const cfg = {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {label:'Nhiệt độ °C', data:tempRows.map(r=>r.value), borderColor:c1, tension:.3, pointRadius:2, yAxisID:'y'},
+            {label:'Độ ẩm %', data:humRows.map(r=>r.value), borderColor:c2, borderDash:[5,3], tension:.3, pointRadius:2, yAxisID:'y1'},
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{display:true,position:'top',labels:{boxWidth:12,font:{size:11},color:cs.getPropertyValue('--fg-muted').trim()}}},
+          scales:{
+            x:{grid:{display:false},ticks:{color:cs.getPropertyValue('--fg-muted').trim(),maxTicksLimit:6}},
+            y:{position:'left',grid:{color:cs.getPropertyValue('--border').trim()},ticks:{color:c1,callback:v=>v+'°'}},
+            y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:c2,callback:v=>v+'%'}}
+          }
+        }
+      };
+      if (envChart) envChart.destroy();
+      envChart = new Chart(document.getElementById('chart-env'), cfg);
+    } catch(e) {}
+  }
+
+  // ── Alerts ──
+  async function loadAlerts() {
+    try {
+      const rows = await api('/api/alerts/?limit=10');
+      const tb = document.getElementById('alerts-body');
+      if (!rows.length) { tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--fg-muted)">Không có cảnh báo</td></tr>'; return; }
+      tb.innerHTML = rows.map(r => {
+        const typeCls = r.alert_type==='JAM'?'badge-bad':r.alert_type==='LOW_FOOD'?'badge-warn':'badge-warn';
+        const statusCls = r.resolved?'badge-ok':'badge-bad';
+        return `<tr>
+          <td>${fmt(r.created_at)}</td>
+          <td><span class="badge ${typeCls}">${esc(r.alert_type)}</span></td>
+          <td>${esc(r.message)}</td>
+          <td><span class="badge ${statusCls}">${r.resolved?'Đã xử lý':'Chưa'}</span></td>
+        </tr>`;
+      }).join('');
+    } catch(e) {
+      document.getElementById('alerts-body').innerHTML = '<tr><td colspan="4" style="color:var(--bad)">Lỗi tải dữ liệu</td></tr>';
+    }
+  }
+
+  // ── Schedules ──
+  async function loadSchedules() {
+    try {
+      const rows = await api('/api/schedule/');
+      const el = document.getElementById('schedule-list');
+      if (!rows.length) { el.innerHTML = '<div style="color:var(--fg-muted);text-align:center">Chưa có lịch</div>'; return; }
+      el.innerHTML = rows.map(r => {
+        const hh = String(r.hour).padStart(2,'0');
+        const mm = String(r.minute).padStart(2,'0');
+        return `<div class="sched-row">
+          <span class="sched-time">${hh}:${mm}</span>
+          <span class="sched-grams">${r.grams}g</span>
+          <span class="badge ${r.enabled?'badge-ok':'badge-warn'}">${r.enabled?'Bật':'Tắt'}</span>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      document.getElementById('schedule-list').innerHTML = '<div style="color:var(--bad)">Lỗi tải</div>';
+    }
+  }
+
+  function esc(s) { const d=document.createElement('span'); d.textContent=s; return d.innerHTML; }
+
+  // ── Commands ──
+  window.doFeed = async function() {
+    const btn = document.getElementById('btn-feed');
+    const grams = Number(document.getElementById('feed-grams').value) || 30;
+    btn.disabled = true;
+    btn.textContent = 'Đang gửi...';
+    try {
+      const r = await apiPost('/api/feed/', {grams});
+      toast(r.ok ? `Đã gửi ${grams}g tới broker; chờ kết quả từ máy` : 'Lỗi gửi lệnh', r.ok);
+    } catch(e) { toast('Mất kết nối server', false); }
+    btn.disabled = false;
+    btn.textContent = 'Cho ăn';
+    setTimeout(refreshAll, 3000);
+  };
+
+  window.doTare = async function() {
+    const btn = document.getElementById('btn-tare');
+    btn.disabled = true;
+    try {
+      const r = await apiPost('/api/feed/tare');
+      toast(r.ok ? 'Đã gửi lệnh tare' : 'Lỗi', r.ok);
+    } catch(e) { toast('Mất kết nối', false); }
+    btn.disabled = false;
+  };
+
+  // ── Refresh All ──
+  window.refreshAll = async function() {
+    await Promise.all([loadDevice(), loadFeedHistory(), loadWeight(), loadEnv(), loadAlerts(), loadSchedules()]);
+  };
+
+  // Init
+  refreshAll();
+  refreshTimer = setInterval(refreshAll, 5000);
+})();
+</script>
+</body>
+</html>
