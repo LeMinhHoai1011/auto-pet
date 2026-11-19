@@ -60,7 +60,7 @@ curl http://localhost/api/health  # {"status":"ok"}
 Sua `include/secrets.h`:
 ```cpp
 const char MQTT_HOST[] = "192.168.1.100";  // IP Ubuntu server
-const int  MQTT_PORT   = 1883;
+const int  MQTT_PORT   = 1884; // Host port mapped to broker container port 1883
 const char MQTT_USER[] = "mqtt_user";
 const char MQTT_PASS[] = "mqtt_pass";
 ```

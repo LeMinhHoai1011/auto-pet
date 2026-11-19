@@ -56,7 +56,10 @@ Kiểm tra tài khoản MQTT trong hai file phải khớp nhau:
 
 Trong `include/config.h`, giữ `WOKWI_SIM = 1` (dòng `#define WOKWI_SIM 1`).
 Ở chế độ này firmware dùng WiFi `Wokwi-GUEST` và broker
-`host.wokwi.internal:1883` để truy cập máy chạy gateway Wokwi.
+`host.wokwi.internal:1884` để truy cập broker Docker trên máy chạy gateway Wokwi.
+Docker map cổng host **1884** vào cổng broker nội bộ **1883**, tránh trùng
+dịch vụ Mosquitto Windows ở localhost:1883. `MQTT_PORT` trong `server/.env`
+vẫn giữ 1883 vì API kết nối trong mạng Docker.
 
 Các mật khẩu mặc định chỉ phục vụ chạy local. Nếu đổi mật khẩu, đồng bộ
 `server/.env`, `include/secrets.h` và file mật khẩu Mosquitto.
@@ -187,7 +190,7 @@ Nếu OLED đổi nhưng API vẫn `null`, kiểm tra đường MQTT bằng log 
 docker compose -f server/docker-compose.yml logs --tail 80 api mosquitto
 ```
 
-Serial ESP32 cần có `[MQTT] connected remote=...:1883`.
+Serial ESP32 cần có `[MQTT] connected remote=...:1884`.
 Log Mosquitto local cần có kết nối của client `device01` và dữ liệu ở topic
 `petfeeder/device01/sensor/weight`. `sent` trong Serial chỉ xác nhận gửi vào
 kết nối MQTT hiện tại, không chứng minh server local đã lưu dữ liệu.
@@ -286,6 +289,7 @@ Không dùng `down -v` trong thao tác dừng thường ngày vì tùy chọn đ
 | `HX711 NOT READY` | Kiểm tra nguồn, GND, DT → RX2, SCK → D4; chạy lại sơ đồ mới. |
 | `raw=0` dù firmware chạy | Xác nhận đã tăng đúng thanh Pressure của HX711; thử cân riêng trước khi bấm. |
 | OLED có gram, web không có | Kiểm tra MQTT hai chiều, broker thực tế và API status; không tự coi `sent` là xác nhận lưu DB. |
+| MQTT connected nhưng Docker không thấy device01 | Kiểm tra firmware dùng host.wokwi.internal:1884; cổng 1883 trên Windows có thể thuộc broker khác. |
 | Motor quay, cân không tăng | Wokwi chưa mô phỏng hạt rơi; tăng tải HX711 trong khoảng chờ test. |
 | `skipped` | Bát có thể đã đủ mục tiêu hoặc bị stale lock; xem dòng ngay trước sự kiện. |
 | `[HX711]`/`[MQTT TX]` in lặp | Đây là log đọc/gửi trạng thái định kỳ, không có nghĩa motor quay liên tục. |

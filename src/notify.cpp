@@ -24,8 +24,10 @@ static float pendingGrams  = 0;
 #if WOKWI_SIM
 // Docker broker on the computer running the Wokwi private gateway.
 static const char* const mqttHost = "host.wokwi.internal";
+static const int mqttPort = WOKWI_MQTT_PORT;
 #else
 static const char* const mqttHost = MQTT_HOST;
+static const int mqttPort = MQTT_PORT;
 #endif
 
 // ─────────────────────────────────────────────
@@ -114,7 +116,7 @@ static void mqttConnect() {
                      MQTT_PUB_STATUS, 0, true, "offline")) {
         resetPetDetection();
         Serial.printf("[MQTT] connected remote=%s:%d\n",
-                      mqttWiFi.remoteIP().toString().c_str(), MQTT_PORT);
+                      mqttWiFi.remoteIP().toString().c_str(), mqttPort);
         mqttRetryS = 5;
 
         // Online
@@ -135,7 +137,7 @@ static void mqttConnect() {
         Serial.printf("[MQTT] subscribed: %s, %s\n", sub1, sub2);
     } else {
         Serial.printf("[MQTT] %s:%d failed rc=%d retry in %lus\n",
-                      mqttHost, MQTT_PORT, mqtt.state(), mqttRetryS);
+                      mqttHost, mqttPort, mqtt.state(), mqttRetryS);
         mqttRetryS = min(mqttRetryS * 2, (uint32_t)300);
     }
 }
@@ -163,8 +165,8 @@ static void flushQueue() {
 //  Public API
 // ─────────────────────────────────────────────
 void notifyInit() {
-    mqtt.setServer(mqttHost, MQTT_PORT);
-    Serial.printf("[MQTT] Broker %s:%d\n", mqttHost, MQTT_PORT);
+    mqtt.setServer(mqttHost, mqttPort);
+    Serial.printf("[MQTT] Broker %s:%d\n", mqttHost, mqttPort);
     mqtt.setCallback(mqttCallback);
     mqtt.setBufferSize(1152);
 }
@@ -206,7 +208,7 @@ void notifyPublishState() {
     bool weightSent = mqtt.publish(MQTT_PUB_SENSOR, buf);
     Serial.printf("[MQTT TX] %s %s remote=%s:%d payload=%s\n",
                   MQTT_PUB_SENSOR, weightSent ? "sent" : "failed",
-                  mqttWiFi.remoteIP().toString().c_str(), MQTT_PORT, buf);
+                  mqttWiFi.remoteIP().toString().c_str(), mqttPort, buf);
 
     // Hopper
     snprintf(buf, sizeof(buf), "{\"hopper_pct\":%d}", getHopperPct());
