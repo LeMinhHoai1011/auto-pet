@@ -153,8 +153,17 @@ static void sensorsUpdateLoadcell() {
 
 void sensorsPollWeight() { sensorsUpdateLoadcell(); }
 
+#if WOKWI_SIM
+static float virtualOffset = 0;
+
+void sensorsAddVirtualGrams(float g) { virtualOffset += g; }
+
+float getBowlGrams()    { return lcStable + virtualOffset; }
+float getBowlGramsRaw() { return lcFiltered + virtualOffset; }
+#else
 float getBowlGrams()    { return lcStable; }
 float getBowlGramsRaw() { return lcFiltered; }
+#endif
 
 void tareBowl() {
     scale.tare();
@@ -164,6 +173,9 @@ void tareBowl() {
     lcBufIdx = 0;
     lcBufFull = false;
     lcStableCnt = 0;
+#if WOKWI_SIM
+    virtualOffset = 0;
+#endif
     NVSData& d = nvsGet();
     d.lastTareTime = tkEpoch();
     nvsMark();

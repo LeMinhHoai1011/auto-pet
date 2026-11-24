@@ -10,6 +10,9 @@ float    getBowlGrams();          // gram đã lọc nhiễu (stable)
 float    getBowlGramsRaw();       // gram sau median filter (phản hồi nhanh)
 void     tareBowl();
 void     sensorsAutoTare();
+#if WOKWI_SIM
+void     sensorsAddVirtualGrams(float g);
+#endif
 
 // ── HC-SR04 — mức thức ăn thùng ─────────────
 float    getHopperCm();

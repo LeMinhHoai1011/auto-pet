@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Recognition · Pet Feeder</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f7f9;--bg-card:#fff;--fg:#1a1d23;--fg-muted:#6b7280;--border:#e2e5ea;--accent:#3b82f6;--accent-light:#dbeafe;--ok:#10b981;--ok-light:#d1fae5;--warn:#f59e0b;--warn-light:#fef3c7;--bad:#ef4444;--bad-light:#fee2e2;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1117;--bg-card:#1a1d27;--fg:#e8eaed;--fg-muted:#9ca3af;--border:#2d3140;--accent:#60a5fa;--accent-light:#1e3a5f;--ok:#34d399;--ok-light:#064e3b;--warn:#fbbf24;--warn-light:#78350f;--bad:#f87171;--bad-light:#7f1d1d;--shadow:0 1px 3px rgba(0,0,0,.3);color-scheme:dark}}
+*,*::before,*::after{box-sizing:border-box;margin:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--fg);line-height:1.5;padding:16px;min-height:100vh}
+.wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700}
+h2{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;margin-bottom:12px}
+a{color:var(--accent)}
+.header{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.header h1{flex:1;min-width:200px}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.btn{font-family:inherit;font-size:14px;font-weight:600;padding:7px 16px;border:none;border-radius:8px;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-ok{background:var(--ok);color:#fff}
+.btn-bad{background:var(--bad);color:#fff}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-secondary{background:var(--bg-card);color:var(--fg);border:1px solid var(--border)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.stat{text-align:center;padding:10px}
+.stat-val{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat-label{font-size:11px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.04em}
+.two-col{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+@media(max-width:800px){.two-col{grid-template-columns:1fr}}
+.video-container{position:relative;border-radius:var(--radius);overflow:hidden;background:#000;min-height:300px;display:flex;align-items:center;justify-content:center}
+.video-container img{width:100%;height:auto;display:block}
+.video-placeholder{color:var(--fg-muted);text-align:center;padding:40px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.badge-ok{background:var(--ok-light);color:var(--ok)}
+.badge-warn{background:var(--warn-light);color:var(--warn)}
+.badge-bad{background:var(--bad-light);color:var(--bad)}
+.badge-muted{background:var(--border);color:var(--fg-muted)}
+.pet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.pet-card{text-align:center;padding:12px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:border-color .2s}
+.pet-card:hover{border-color:var(--accent)}
+.pet-avatar{width:80px;height:80px;border-radius:50%;object-fit:cover;background:var(--border);margin:0 auto 8px}
+.pet-name{font-weight:600;font-size:14px}
+.pet-emb{font-size:11px;color:var(--fg-muted)}
+.session-list{max-height:400px;overflow-y:auto}
+.session-item{display:flex;gap:12px;padding:10px;border-bottom:1px solid var(--border);align-items:center}
+.session-item:last-child{border-bottom:none}
+.session-thumb{width:60px;height:60px;border-radius:8px;object-fit:cover;background:var(--border)}
+.session-info{flex:1;font-size:13px}
+.session-actions{display:flex;gap:6px;flex-wrap:wrap}
+.upload-area{border:2px dashed var(--border);border-radius:var(--radius);padding:30px;text-align:center;cursor:pointer;transition:border-color .2s}
+.upload-area:hover{border-color:var(--accent)}
+.upload-area input{display:none}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-weight:600;font-size:11px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;border-bottom:2px solid var(--border)}
+td{padding:6px 8px;border-bottom:1px solid var(--border)}
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;color:#fff;z-index:100;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast-ok{background:var(--ok)}
+.toast-err{background:var(--bad)}
+select,input[type=text],input[type=number]{font:inherit;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--fg)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="header">
+    <h1>AI Recognition</h1>
+    <a href="/">Dashboard</a>
+    <span id="ai-status" class="badge badge-muted">OFF</span>
+    <span id="device-info" style="font-size:12px;color:var(--fg-muted)"></span>
+  </header>
+
+  <!-- Stats -->
+  <div class="card">
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="s-fps">0</div><div class="stat-label">Camera FPS</div></div>
+      <div class="stat"><div class="stat-val" id="s-aifps">0</div><div class="stat-label">AI FPS</div></div>
+      <div class="stat"><div class="stat-val" id="s-ms">0</div><div class="stat-label">Process ms</div></div>
+      <div class="stat"><div class="stat-val" id="s-cats">0</div><div class="stat-label">Cats</div></div>
+      <div class="stat"><div class="stat-val" id="s-sessions">0</div><div class="stat-label">Sessions</div></div>
+      <div class="stat"><div class="stat-val" id="s-collected">0</div><div class="stat-label">Collected</div></div>
+      <div class="stat"><div class="stat-val" id="s-pets">0</div><div class="stat-label">Pets</div></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <div class="controls">
+      <button class="btn btn-ok" id="btn-start" onclick="startPipeline()">Start AI</button>
+      <button class="btn btn-bad" id="btn-stop" onclick="stopPipeline()" disabled>Stop AI</button>
+      <select id="camera-source">
+        <option value="0">Webcam 0</option>
+        <option value="1">Webcam 1</option>
+      </select>
+      <span style="font-size:12px;color:var(--fg-muted)">|</span>
+      <button class="btn btn-secondary" onclick="identifyFromFile()">Identify Image</button>
+      <input type="file" id="id-file" accept="image/*" style="display:none" onchange="doIdentifyFile(this)">
+    </div>
+  </div>
+
+  <!-- Video + Side panel -->
+  <div class="two-col">
+    <div>
+      <!-- Video stream -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="video-container" id="video-box">
+          <div class="video-placeholder" id="video-placeholder">
+            Start AI to see camera feed with recognition overlays
+          </div>
+          <img id="video-feed" src="" alt="" style="display:none">
+        </div>
+      </div>
+
+      <!-- Single-image identification results -->
+      <div class="card" id="id-results" style="display:none;margin-top:16px">
+        <h2>Identification Results</h2>
+        <div id="id-results-body"></div>
+      </div>
+    </div>
+
+    <div>
+      <!-- Pet registry -->
+      <div class="card">
+        <h2>Registered Pets</h2>
+        <div id="pet-list" class="pet-grid"></div>
+        <div style="margin-top:12px">
+          <button class="btn btn-accent" onclick="showAddPet()">+ Add Pet</button>
+        </div>
+      </div>
+
+      <!-- Pending sessions -->
+      <div class="card" style="margin-top:16px">
+        <h2>Pending Sessions</h2>
+        <div class="session-list" id="session-list">
+          <div style="color:var(--fg-muted);text-align:center;padding:20px">No pending sessions</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recognition logs -->
+  <div class="card">
+    <h2>Recognition Log</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Time</th><th>Status</th><th>Pet</th><th>Similarity</th><th>Tracker</th></tr></thead>
+        <tbody id="log-body">
+          <tr><td colspan="5" style="text-align:center;color:var(--fg-muted)">No logs yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Pet Modal -->
+<div id="add-pet-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;display:none;align-items:center;justify-content:center">
+  <div class="card" style="width:min(400px,90vw)">
+    <h2>Add New Pet</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+      <input type="text" id="new-pet-name" placeholder="Name">
+      <input type="text" id="new-pet-breed" placeholder="Breed (optional)">
+      <input type="text" id="new-pet-color" placeholder="Color (optional)">
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('pet-images').click()">
+        Drop images or click to upload
+        <input type="file" id="pet-images" accept="image/*" multiple onchange="handleImageUpload(this)">
+      </div>
+      <div id="upload-preview" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      <div id="upload-status" style="font-size:12px;color:var(--fg-muted)"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="hideAddPet()">Cancel</button>
+        <button class="btn btn-accent" id="btn-save-pet" onclick="savePet()">Save Pet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+(function(){
+  const API = '';
+  let pollTimer = null;
+  let running = false;
+
+  function esc(s){const d=document.createElement('span');d.textContent=s;return d.innerHTML}
+  function toast(msg,ok){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show '+(ok?'toast-ok':'toast-err');setTimeout(()=>el.className='toast',3000)}
+
+  async function api(path){const r=await fetch(API+path);if(!r.ok)throw new Error(r.status+'');return r.json()}
+  async function apiPost(path,body){const r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});return r.json()}
+
+  // ── Pipeline control ──
+  window.startPipeline = async function(){
+    document.getElementById('btn-start').disabled=true;
+    try{
+      const r=await apiPost('/api/recognition/start?mode=observe');
+      if(r.ok){
+        running=true;
+        document.getElementById('btn-stop').disabled=false;
+        document.getElementById('video-feed').style.display='block';
+        document.getElementById('video-placeholder').style.display='none';
+        document.getElementById('video-feed').src='/api/recognition/stream';
+        startPolling();
+        toast('AI started',true);
+      } else {
+        toast(r.error||'Failed',false);
+        document.getElementById('btn-start').disabled=false;
+      }
+    }catch(e){toast('Error: '+e.message,false);document.getElementById('btn-start').disabled=false}
+  };
+
+  window.stopPipeline = async function(){
+    document.getElementById('btn-stop').disabled=true;
+    try{
+      await apiPost('/api/recognition/stop');
+      running=false;
+      document.getElementById('btn-start').disabled=false;
+      document.getElementById('video-feed').style.display='none';
+      document.getElementById('video-placeholder').style.display='';
+      document.getElementById('video-feed').src='';
+      stopPolling();
+      toast('AI stopped',true);
+    }catch(e){toast('Error',false);document.getElementById('btn-stop').disabled=false}
+  };
+
+  // ── Status polling ──
+  function startPolling(){stopPolling();pollTimer=setInterval(pollStatus,1000)}
+  function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
+
+  async function pollStatus(){
+    try{
+      const s=await api('/api/recognition/status');
+      document.getElementById('s-fps').textContent=s.fps.toFixed(1);
+      document.getElementById('s-aifps').textContent=s.ai_fps.toFixed(1);
+      document.getElementById('s-ms').textContent=s.process_time_ms.toFixed(0);
+      document.getElementById('s-cats').textContent=s.cats_detected;
+      document.getElementById('s-sessions').textContent=s.active_sessions;
+      document.getElementById('s-collected').textContent=s.total_collected;
+      document.getElementById('device-info').textContent=s.device_info;
+
+      const badge=document.getElementById('ai-status');
+      if(s.mode==='off'){badge.textContent='OFF';badge.className='badge badge-muted'}
+      else if(s.mode==='observe'){badge.textContent='OBSERVE';badge.className='badge badge-ok'}
+      else if(s.mode==='register'){badge.textContent='REGISTER';badge.className='badge badge-warn'}
+    }catch(e){}
+  }
+
+  // ── Pets ──
+  async function loadPets(){
+    try{
+      const pets=await api('/api/pets/?active_only=true');
+      document.getElementById('s-pets').textContent=pets.length;
+      const el=document.getElementById('pet-list');
+      if(!pets.length){el.innerHTML='<div style="color:var(--fg-muted);text-align:center;grid-column:1/-1">No pets registered</div>';return}
+      el.innerHTML=pets.map(p=>{
+        const avatar=p.avatar_path?('/storage/'+p.avatar_path):'';
+        return `<div class="pet-card" onclick="showPetDetail(${p.id})">
+          <div class="pet-avatar" style="${avatar?'background-image:url('+esc(avatar)+');background-size:cover':''}"></div>
+          <div class="pet-name">${esc(p.name)}</div>
+          <div class="pet-emb">${p.embedding_count} embeddings</div>
+        </div>`;
+      }).join('');
+    }catch(e){}
+  }
+
+  window.showAddPet = function(){document.getElementById('add-pet-modal').style.display='flex'};
+  window.hideAddPet = function(){document.getElementById('add-pet-modal').style.display='none';document.getElementById('upload-preview').innerHTML='';document.getElementById('upload-status').textContent=''};
+
+  window.savePet = async function(){
+    const name=document.getElementById('new-pet-name').value.trim();
+    if(!name){toast('Name required',false);return}
+    const btn=document.getElementById('btn-save-pet');btn.disabled=true;btn.textContent='Saving...';
+    try{
+      const pet=await apiPost('/api/pets/',{name,breed:document.getElementById('new-pet-breed').value,color:document.getElementById('new-pet-color').value});
+      // Upload images if any
+      const fileInput=document.getElementById('pet-images');
+      if(fileInput.files.length>0){
+        const fd=new FormData();
+        for(const f of fileInput.files)fd.append('files',f);
+        const ur=await fetch(`/api/pets/${pet.id}/images`,{method:'POST',body:fd});
+        const results=await ur.json();
+        const accepted=results.filter(r=>r.accepted).length;
+        const rejected=results.length-accepted;
+        document.getElementById('upload-status').textContent=`${accepted} accepted, ${rejected} rejected`;
+      }
+      hideAddPet();
+      loadPets();
+      toast('Pet added: '+name,true);
+    }catch(e){toast('Error: '+e.message,false)}
+    btn.disabled=false;btn.textContent='Save Pet';
+  };
+
+  window.handleImageUpload = function(input){
+    const preview=document.getElementById('upload-preview');
+    preview.innerHTML='';
+    for(const f of input.files){
+      const url=URL.createObjectURL(f);
+      const img=document.createElement('img');
+      img.src=url;img.style.cssText='width:60px;height:60px;object-fit:cover;border-radius:8px';
+      preview.appendChild(img);
+    }
+    document.getElementById('upload-status').textContent=input.files.length+' images selected';
+  };
+
+  window.showPetDetail = async function(petId){
+    toast('Loading pet #'+petId+'...',true);
+    // Minimal: could expand to a full detail modal
+  };
+
+  // ── Identify from file ──
+  window.identifyFromFile = function(){document.getElementById('id-file').click()};
+  window.doIdentifyFile = async function(input){
+    const f=input.files[0];if(!f)return;input.value='';
+    const fd=new FormData();fd.append('file',f);
+    const box=document.getElementById('id-results');box.style.display='block';
+    document.getElementById('id-results-body').innerHTML='Analyzing...';
+    try{
+      const r=await fetch('/api/recognition/identify',{method:'POST',body:fd});
+      const data=await r.json();
+      if(data.status==='NO_CAT'){
+        document.getElementById('id-results-body').innerHTML='<p>No cat detected in image.</p>';return;
+      }
+      let html='<p>'+data.detections+' cat(s) found:</p>';
+      for(const res of data.results||[]){
+        const cls=res.status==='KNOWN'?'badge-ok':res.status==='UNCERTAIN'?'badge-warn':'badge-bad';
+        html+=`<div style="margin:8px 0;padding:8px;border:1px solid var(--border);border-radius:8px">
+          <span class="badge ${cls}">${esc(res.status)}</span>
+          ${res.pet_name?'<strong> '+esc(res.pet_name)+'</strong>':''}
+          <span style="color:var(--fg-muted)"> Sim: ${(res.similarity*100).toFixed(1)}% | Margin: ${(res.margin*100).toFixed(1)}% | Det: ${(res.detection_confidence*100).toFixed(0)}%</span>
+        </div>`;
+      }
+      document.getElementById('id-results-body').innerHTML=html;
+    }catch(e){document.getElementById('id-results-body').innerHTML='Error: '+esc(e.message)}
+  };
+
+  // ── Sessions ──
+  async function loadSessions(){
+    try{
+      const sessions=await api('/api/recognition/sessions?status=pending&limit=10');
+      const el=document.getElementById('session-list');
+      if(!sessions.length){el.innerHTML='<div style="color:var(--fg-muted);text-align:center;padding:20px">No pending sessions</div>';return}
+      el.innerHTML=sessions.map(s=>{
+        const time=new Date(s.started_at).toLocaleString('vi');
+        return `<div class="session-item">
+          <div class="session-info">
+            <div><strong>Session ${esc(s.session_id.slice(0,8))}</strong> · Tracker #${s.tracker_id}</div>
+            <div style="color:var(--fg-muted)">${time} · ${s.image_count} images</div>
+            ${s.suggested_pet_id?`<div>Suggested: Pet #${s.suggested_pet_id} (${(s.similarity_score*100).toFixed(1)}%)</div>`:''}
+          </div>
+          <div class="session-actions">
+            <button class="btn btn-accent" style="font-size:12px;padding:4px 10px" onclick="assignSession('${esc(s.session_id)}')">Assign</button>
+            <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="rejectSession('${esc(s.session_id)}')">Reject</button>
+          </div>
+        </div>`;
+      }).join('');
+    }catch(e){}
+  }
+
+  window.assignSession = async function(sid){
+    const petId=prompt('Enter pet ID to assign (or leave empty for new pet):');
+    if(petId===null)return;
+    const body=petId?{pet_id:parseInt(petId)}:{create_new:true,new_pet_name:prompt('New pet name:')||'Unknown'};
+    try{
+      const r=await apiPost('/api/recognition/sessions/'+sid+'/assign',body);
+      if(r.ok){toast('Session assigned',true);loadSessions();loadPets()}else{toast('Error',false)}
+    }catch(e){toast('Error',false)}
+  };
+
+  window.rejectSession = async function(sid){
+    try{
+      await apiPost('/api/recognition/sessions/'+sid+'/reject');
+      toast('Session rejected',true);loadSessions();
+    }catch(e){toast('Error',false)}
+  };
+
+  // ── Logs ──
+  async function loadLogs(){
+    try{
+      const logs=await api('/api/recognition/logs?limit=20');
+      const tb=document.getElementById('log-body');
+      if(!logs.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--fg-muted)">No logs yet</td></tr>';return}
+      tb.innerHTML=logs.map(l=>{
+        const cls=l.status==='KNOWN'?'badge-ok':l.status==='UNCERTAIN'?'badge-warn':l.status==='UNKNOWN'?'badge-bad':'badge-muted';
+        const time=new Date(l.created_at).toLocaleString('vi',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        return `<tr>
+          <td>${time}</td>
+          <td><span class="badge ${cls}">${esc(l.status)}</span></td>
+          <td>${l.pet_id?'Pet #'+l.pet_id:'—'}</td>
+          <td>${(l.similarity*100).toFixed(1)}%</td>
+          <td>#${l.tracker_id||'—'}</td>
+        </tr>`;
+      }).join('');
+    }catch(e){}
+  }
+
+  // ── Init ──
+  loadPets();
+  loadSessions();
+  loadLogs();
+  setInterval(()=>{loadSessions();loadLogs()},5000);
+})();
+</script>
+</body>
+</html>

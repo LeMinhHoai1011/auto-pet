@@ -93,7 +93,9 @@ FeedResult feederDispense(float targetGrams, float& actualGrams) {
     const uint32_t FEED_TIMEOUT_MS = 60000;
     Serial.printf(">> Bat dau nha %.1fg thuc an...\r\n", targetGrams);
 #if WOKWI_SIM
-    Serial.printf(">> (Wokwi: %lus de keo thanh can)\r\n", WOKWI_FEED_GRACE_MS / 1000UL);
+    // Ước tính gram mỗi dose dựa trên steps (Wokwi không có loadcell thật)
+    const float gramsPerDose = 5.0f;
+    Serial.println(">> (Wokwi: virtual loadcell - tu dong tinh gram)");
 #endif
 
     while (true) {
@@ -105,6 +107,11 @@ FeedResult feederDispense(float targetGrams, float& actualGrams) {
 
         long enc = stepperRunDose(STEPPER_STEPS_PER_DOSE);
 
+#if WOKWI_SIM
+        // Mô phỏng thức ăn rơi vào bát: mỗi dose cộng thêm gram
+        sensorsAddVirtualGrams(gramsPerDose);
+#endif
+
         // Chờ cân ổn định
         uint32_t pauseStart = millis();
         do {
@@ -115,15 +122,6 @@ FeedResult feederDispense(float targetGrams, float& actualGrams) {
         float nowGrams = getBowlGramsRaw();
         actualGrams = nowGrams - startGrams;
         dispState.bowlGrams = nowGrams;
-#if WOKWI_SIM
-        uint32_t elapsed = millis() - feedStartMs;
-        if (elapsed < WOKWI_FEED_GRACE_MS) {
-            unsigned long left = (WOKWI_FEED_GRACE_MS - elapsed + 999) / 1000;
-            snprintf(dispState.errorMsg, sizeof(dispState.errorMsg), "TEST: con %lus keo can", left);
-        } else {
-            dispState.errorMsg[0] = '\0';
-        }
-#endif
         displayLoop();
         Serial.printf("   Bat: %.1fg | Da nha: %.1fg / %.1fg\r\n",
                       nowGrams, actualGrams, targetGrams);
@@ -132,13 +130,6 @@ FeedResult feederDispense(float targetGrams, float& actualGrams) {
             result = FEED_OK;
             break;
         }
-
-#if WOKWI_SIM
-        // Human time to operate the slider; never synthesize bowl grams.
-        // Reaching target still stops immediately above. Real hardware keeps
-        // its existing jam/bridge checks without this grace period.
-        if (elapsed < WOKWI_FEED_GRACE_MS) continue;
-#endif
 
         float delta = nowGrams - prevGrams;
 

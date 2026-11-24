@@ -5,6 +5,7 @@ import '../models/device_state.dart';
 import '../models/feeding_log.dart';
 import '../models/schedule.dart';
 import '../models/alert_log.dart';
+import '../models/pet.dart';
 
 class ApiService {
   static const _defaultHost = 'http://192.168.1.100';
@@ -162,4 +163,81 @@ class ApiService {
         '/api/push/register', {'token': token, 'device_name': deviceName});
     return r != null;
   }
+
+  // ── Pets ──
+  Future<List<Pet>> getPets({bool activeOnly = true}) async {
+    final r = await _getList('/api/pets/', {'active_only': '$activeOnly'});
+    if (r == null) return [];
+    return r.map((e) => Pet.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<Pet?> createPet(String name, {String breed = '', String color = ''}) async {
+    final r = await _post('/api/pets/', {'name': name, 'breed': breed, 'color': color});
+    if (r == null) return null;
+    return Pet.fromJson(r);
+  }
+
+  Future<bool> uploadPetImages(int petId, List<String> filePaths) async {
+    try {
+      final uri = _uri('/api/pets/$petId/images');
+      final request = http.MultipartRequest('POST', uri);
+      for (final path in filePaths) {
+        request.files.add(await http.MultipartFile.fromPath('files', path));
+      }
+      final response = await request.send().timeout(const Duration(seconds: 60));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ── Recognition ──
+  Future<Map<String, dynamic>?> getRecognitionStatus() async {
+    return _get('/api/recognition/status');
+  }
+
+  Future<List<RecognitionSession>> getPendingSessions() async {
+    final r = await _getList('/api/recognition/sessions', {'status': 'pending', 'limit': '20'});
+    if (r == null) return [];
+    return r.map((e) => RecognitionSession.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<RecognitionLog>> getRecognitionLogs({int limit = 10}) async {
+    final r = await _getList('/api/recognition/logs', {'limit': '$limit'});
+    if (r == null) return [];
+    return r.map((e) => RecognitionLog.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<bool> assignSession(String sessionId, {int? petId, String? newPetName}) async {
+    final body = <String, dynamic>{};
+    if (petId != null) {
+      body['pet_id'] = petId;
+    } else if (newPetName != null) {
+      body['create_new'] = true;
+      body['new_pet_name'] = newPetName;
+    }
+    final r = await _post('/api/recognition/sessions/$sessionId/assign', body);
+    return r != null && r['ok'] == true;
+  }
+
+  Future<bool> rejectSession(String sessionId) async {
+    final r = await _post('/api/recognition/sessions/$sessionId/reject');
+    return r != null && r['ok'] == true;
+  }
+
+  Future<Map<String, dynamic>?> identifyImage(String filePath) async {
+    try {
+      final uri = _uri('/api/recognition/identify');
+      final request = http.MultipartRequest('POST', uri);
+      request.files.add(await http.MultipartFile.fromPath('file', filePath));
+      final response = await request.send().timeout(const Duration(seconds: 30));
+      if (response.statusCode == 200) {
+        final body = await response.stream.bytesToString();
+        return jsonDecode(body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String imageUrl(String path) => '$_baseUrl/storage/$path';
 }

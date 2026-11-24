@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
+import '../theme.dart';
 
 class ScheduleScreen extends StatelessWidget {
   const ScheduleScreen({super.key});
@@ -10,66 +11,101 @@ class ScheduleScreen extends StatelessWidget {
     final state = context.watch<AppState>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Lịch cho ăn')),
-      body: state.schedules.isEmpty
-          ? const Center(child: Text('Chưa có lịch'))
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: state.schedules.length,
-              itemBuilder: (ctx, i) {
-                final s = state.schedules[i];
-                return Dismissible(
-                  key: ValueKey(s.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    color: Colors.red,
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-                  confirmDismiss: (_) async {
-                    return await showDialog<bool>(
-                      context: ctx,
-                      builder: (c) => AlertDialog(
-                        title: const Text('Xóa lịch?'),
-                        content: Text('Xóa lịch ${s.timeStr}?'),
-                        actions: [
-                          TextButton(
-                              onPressed: () => Navigator.pop(c, false),
-                              child: const Text('Hủy')),
-                          TextButton(
-                              onPressed: () => Navigator.pop(c, true),
-                              child: const Text('Xóa',
-                                  style: TextStyle(color: Colors.red))),
-                        ],
+      appBar: AppBar(
+        title: const Text('Lịch cho ăn'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: () => _showAddDialog(context),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: state.refresh,
+        child: state.schedules.isEmpty
+            ? ListView(children: [
+                const SizedBox(height: 120),
+                Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.schedule, size: 64, color: AppColors.fgMuted),
+                      const SizedBox(height: 12),
+                      const Text('Chưa có lịch cho ăn',
+                          style: TextStyle(fontSize: 16, color: AppColors.fgSecondary)),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: () => _showAddDialog(context),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Thêm lịch'),
                       ),
-                    );
-                  },
-                  onDismissed: (_) =>
-                      context.read<AppState>().removeSchedule(s.id),
-                  child: Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      leading: Icon(Icons.schedule,
-                          color: s.enabled ? Colors.blue : Colors.grey,
-                          size: 30),
-                      title: Text(s.timeStr,
-                          style: const TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.w700)),
-                      subtitle: Text('${s.grams.toStringAsFixed(0)} grams'),
-                      trailing: Switch(
-                        value: s.enabled,
-                        onChanged: (v) =>
-                            context.read<AppState>().toggleSchedule(s.id, v),
+                    ],
+                  ),
+                ),
+              ])
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: state.schedules.length,
+                itemBuilder: (ctx, i) {
+                  final s = state.schedules[i];
+                  return Dismissible(
+                    key: ValueKey(s.id),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      decoration: BoxDecoration(
+                        color: AppColors.red,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.delete, color: Colors.white),
+                    ),
+                    confirmDismiss: (_) async {
+                      return await showDialog<bool>(
+                        context: ctx,
+                        builder: (c) => AlertDialog(
+                          title: const Text('Xóa lịch?'),
+                          content: Text('Xóa lịch ${s.timeStr}?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Hủy')),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(c, true),
+                              style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+                              child: const Text('Xóa'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    onDismissed: (_) => context.read<AppState>().removeSchedule(s.id),
+                    child: Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(s.timeStr,
+                                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700)),
+                                  Text('${s.grams.toStringAsFixed(0)} gram',
+                                      style: const TextStyle(fontSize: 14, color: AppColors.fgSecondary)),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: s.enabled,
+                              activeThumbColor: AppColors.green,
+                              onChanged: (v) => context.read<AppState>().toggleSchedule(s.id, v),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddDialog(context),
-        child: const Icon(Icons.add),
+                  );
+                },
+              ),
       ),
     );
   }
@@ -86,20 +122,30 @@ class ScheduleScreen extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ListTile(
-                leading: const Icon(Icons.access_time),
-                title: Text(
-                    '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
-                    style: const TextStyle(fontSize: 20)),
+              InkWell(
                 onTap: () async {
-                  final t = await showTimePicker(
-                      context: ctx, initialTime: time);
+                  final t = await showTimePicker(context: ctx, initialTime: time);
                   if (t != null) setDialogState(() => time = t);
                 },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.access_time, color: AppColors.green),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ),
               ),
+              const SizedBox(height: 8),
               Row(
                 children: [
-                  const Text('Grams: '),
+                  const Text('Grams: ', style: TextStyle(fontSize: 13)),
                   Expanded(
                     child: Slider(
                       value: grams,
@@ -110,20 +156,17 @@ class ScheduleScreen extends StatelessWidget {
                       onChanged: (v) => setDialogState(() => grams = v),
                     ),
                   ),
-                  Text('${grams.toStringAsFixed(0)}g'),
+                  Text('${grams.toStringAsFixed(0)}g',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
             ],
           ),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Hủy')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
             FilledButton(
               onPressed: () {
-                context
-                    .read<AppState>()
-                    .addSchedule(time.hour, time.minute, grams);
+                context.read<AppState>().addSchedule(time.hour, time.minute, grams);
                 Navigator.pop(ctx);
               },
               child: const Text('Thêm'),

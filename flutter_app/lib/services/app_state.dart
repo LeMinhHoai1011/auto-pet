@@ -5,6 +5,7 @@ import '../models/device_state.dart';
 import '../models/feeding_log.dart';
 import '../models/schedule.dart';
 import '../models/alert_log.dart';
+import '../models/pet.dart';
 
 class AppState extends ChangeNotifier {
   final ApiService api = ApiService();
@@ -13,6 +14,10 @@ class AppState extends ChangeNotifier {
   List<FeedingLog> feedHistory = [];
   List<Schedule> schedules = [];
   List<AlertLog> alerts = [];
+  List<Pet> pets = [];
+  List<RecognitionSession> pendingSessions = [];
+  List<RecognitionLog> recognitionLogs = [];
+  RecognitionLog? latestRecognition;
   bool connected = false;
   bool loading = true;
   String? error;
@@ -49,6 +54,9 @@ class AppState extends ChangeNotifier {
       api.getFeedHistory(limit: 50),
       api.getSchedules(),
       api.getAlerts(limit: 20),
+      api.getPets(),
+      api.getPendingSessions(),
+      api.getRecognitionLogs(limit: 5),
     ]);
 
     final ds = results[0] as DeviceState?;
@@ -56,6 +64,10 @@ class AppState extends ChangeNotifier {
     feedHistory = results[1] as List<FeedingLog>;
     schedules = results[2] as List<Schedule>;
     alerts = results[3] as List<AlertLog>;
+    pets = results[4] as List<Pet>;
+    pendingSessions = results[5] as List<RecognitionSession>;
+    recognitionLogs = results[6] as List<RecognitionLog>;
+    latestRecognition = recognitionLogs.isNotEmpty ? recognitionLogs.first : null;
 
     loading = false;
     notifyListeners();
@@ -96,6 +108,30 @@ class AppState extends ChangeNotifier {
 
   Future<bool> resolveAlert(int id) async {
     final ok = await api.resolveAlert(id);
+    if (ok) await refresh();
+    return ok;
+  }
+
+  Future<Pet?> addPet(String name, {String breed = '', String color = ''}) async {
+    final pet = await api.createPet(name, breed: breed, color: color);
+    if (pet != null) await refresh();
+    return pet;
+  }
+
+  Future<bool> uploadPetImages(int petId, List<String> filePaths) async {
+    final ok = await api.uploadPetImages(petId, filePaths);
+    if (ok) await refresh();
+    return ok;
+  }
+
+  Future<bool> assignSession(String sessionId, {int? petId, String? newPetName}) async {
+    final ok = await api.assignSession(sessionId, petId: petId, newPetName: newPetName);
+    if (ok) await refresh();
+    return ok;
+  }
+
+  Future<bool> rejectSession(String sessionId) async {
+    final ok = await api.rejectSession(sessionId);
     if (ok) await refresh();
     return ok;
   }

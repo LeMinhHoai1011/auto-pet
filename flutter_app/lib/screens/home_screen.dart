@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
-import '../widgets/status_card.dart';
-import '../widgets/tile_row.dart';
+import '../theme.dart';
 import '../widgets/feed_button.dart';
-import '../widgets/feed_history_chart.dart';
-import 'schedule_screen.dart';
-import 'alerts_screen.dart';
-import 'settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,128 +10,244 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final theme = Theme.of(context);
+    final d = state.device;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pet Feeder'),
-        centerTitle: false,
-        actions: [
-          if (state.alerts.any((a) => !a.resolved))
-            IconButton(
-              icon: Badge(
-                label: Text(
-                    '${state.alerts.where((a) => !a.resolved).length}'),
-                child: const Icon(Icons.notifications),
-              ),
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const AlertsScreen())),
-            ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: state.refresh,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            StatusCard(
-              online: state.device.online,
-              connected: state.connected,
-              updatedAt: state.device.updatedAt,
-              error: state.error,
-            ),
-            const SizedBox(height: 16),
-            TileRow(device: state.device),
-            const SizedBox(height: 16),
-            const FeedButton(),
-            const SizedBox(height: 20),
-            Text('Lịch sử cho ăn',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 200,
-              child: FeedHistoryChart(history: state.feedHistory),
-            ),
-            const SizedBox(height: 20),
-            _SectionHeader(
-              title: 'Lịch cho ăn',
-              trailing: TextButton(
-                onPressed: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ScheduleScreen())),
-                child: const Text('Xem tất cả'),
-              ),
-            ),
-            if (state.schedules.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('Chưa có lịch', textAlign: TextAlign.center),
-              )
-            else
-              ...state.schedules.take(3).map((s) => ListTile(
-                    leading: Icon(
-                      Icons.schedule,
-                      color: s.enabled ? theme.colorScheme.primary : Colors.grey,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: state.refresh,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Header
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Pet Auto',
+                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
+                        Text(_greeting(),
+                            style: const TextStyle(fontSize: 14, color: AppColors.fgSecondary)),
+                      ],
                     ),
-                    title: Text(s.timeStr,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 20)),
-                    subtitle: Text('${s.grams.toStringAsFixed(0)}g'),
-                    trailing: Switch(
-                      value: s.enabled,
-                      onChanged: (v) =>
-                          context.read<AppState>().toggleSchedule(s.id, v),
+                  ),
+                  _StatusBadge(online: d.online, connected: state.connected),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Device card
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1E293B), Color(0xFF334155)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Máy cho ăn #01',
+                        style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${d.bowlGrams.toStringAsFixed(0)} g',
+                                  style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w700)),
+                              const Text('Thức ăn trong bát',
+                                  style: TextStyle(color: Colors.white60, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        Text('Phễu còn: ${d.hopperPct}%',
+                            style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600)),
+                      ],
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Feed button
+              const FeedButton(),
+              const SizedBox(height: 20),
+
+              // Today stats
+              const Text('Hôm nay',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _StatCard(
+                    label: 'Đã xả',
+                    value: '${_todayGrams(state)} g',
+                    sub: '${_todayFeeds(state)} lần',
                   )),
-          ],
+                  const SizedBox(width: 10),
+                  Expanded(child: _StatCard(
+                    label: 'Lần tiếp',
+                    value: _nextSchedule(state),
+                    sub: _nextScheduleGrams(state),
+                  )),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Latest recognition
+              if (state.latestRecognition != null) ...[
+                _RecognitionCard(log: state.latestRecognition!),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        onTap: (i) {
-          if (i == 1) {
-            Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const ScheduleScreen()));
-          } else if (i == 2) {
-            Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const AlertsScreen()));
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_month), label: 'Lịch'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.warning_amber), label: 'Cảnh báo'),
+    );
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Chào buổi sáng!';
+    if (h < 18) return 'Chào buổi chiều!';
+    return 'Chào buổi tối!';
+  }
+
+  int _todayGrams(AppState s) {
+    final today = DateTime.now();
+    return s.feedHistory
+        .where((f) => f.createdAt.day == today.day && f.createdAt.month == today.month && f.result == 'OK')
+        .fold(0, (sum, f) => sum + f.actualGrams.round());
+  }
+
+  int _todayFeeds(AppState s) {
+    final today = DateTime.now();
+    return s.feedHistory
+        .where((f) => f.createdAt.day == today.day && f.createdAt.month == today.month && f.result == 'OK')
+        .length;
+  }
+
+  String _nextSchedule(AppState s) {
+    final enabled = s.schedules.where((sc) => sc.enabled).toList();
+    if (enabled.isEmpty) return '--:--';
+    final now = TimeOfDay.now();
+    final upcoming = enabled.where((sc) =>
+        sc.hour > now.hour || (sc.hour == now.hour && sc.minute > now.minute)).toList();
+    final next = upcoming.isNotEmpty ? upcoming.first : enabled.first;
+    return '${next.hour.toString().padLeft(2, '0')}:${next.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _nextScheduleGrams(AppState s) {
+    final enabled = s.schedules.where((sc) => sc.enabled).toList();
+    if (enabled.isEmpty) return '';
+    final now = TimeOfDay.now();
+    final upcoming = enabled.where((sc) =>
+        sc.hour > now.hour || (sc.hour == now.hour && sc.minute > now.minute)).toList();
+    final next = upcoming.isNotEmpty ? upcoming.first : enabled.first;
+    return '${next.grams.toStringAsFixed(0)} gram';
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final bool online;
+  final bool connected;
+  const _StatusBadge({required this.online, required this.connected});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = !connected ? Colors.grey : online ? AppColors.green : AppColors.red;
+    final text = !connected ? 'Offline' : online ? 'Online' : 'Offline';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+          const SizedBox(width: 6),
+          Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final Widget? trailing;
-  const _SectionHeader({required this.title, this.trailing});
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final String sub;
+  const _StatCard({required this.label, required this.value, required this.sub});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700)),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 12, color: AppColors.fgSecondary)),
+            const SizedBox(height: 4),
+            Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+            Text(sub, style: const TextStyle(fontSize: 12, color: AppColors.fgMuted)),
+          ],
         ),
-        ?trailing,
-      ],
+      ),
     );
+  }
+}
+
+class _RecognitionCard extends StatelessWidget {
+  final dynamic log;
+  const _RecognitionCard({required this.log});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = log.status as String;
+    final color = status == 'KNOWN' ? AppColors.green : status == 'UNCERTAIN' ? AppColors.orange : AppColors.red;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Nhận diện gần nhất',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text(log.petId != null ? 'Mèo #${log.petId}' : 'Unknown',
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+            Text(status,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+            Text('Đã xác minh lúc ${_fmtTime(log.createdAt)}',
+                style: const TextStyle(fontSize: 12, color: AppColors.fgMuted)),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () {
+                // Navigate to AI tab would be handled by parent
+              },
+              child: const Text('Mở trung tâm AI',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.fgSecondary)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fmtTime(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }
