@@ -20,7 +20,7 @@ void timekeeperInit() {
             rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
         }
     } else {
-        Serial.println("[TIME] RTC DS1307 not found");
+        Serial.println("!! Dong ho RTC: khong tim thay");
     }
     // Cấu hình NTP
     configTime(GMT_OFFSET_S, DST_OFFSET_S, NTP_SERVER);

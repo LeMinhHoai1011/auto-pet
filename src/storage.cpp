@@ -37,16 +37,16 @@ void storageInit() {
 #if WOKWI_SIM
     // Wokwi không load partitions.bin tự động → skip LittleFS im lặng
     lfsOk = false;
-    Serial.println("[STORAGE] LittleFS skipped (Wokwi mode)");
+    Serial.println(">> Bo nho: che do mo phong (khong luu queue)");
 #else
     lfsOk = LittleFS.begin(false);
     if (!lfsOk) {
-        Serial.println("[STORAGE] LittleFS mount failed, trying format...");
+        Serial.println(">> Bo nho: dinh dang lai...");
         if (LittleFS.format()) {
             lfsOk = LittleFS.begin(false);
         }
     }
-    if (!lfsOk) Serial.println("[STORAGE] LittleFS unavailable, queue disabled");
+    if (!lfsOk) Serial.println("!! Bo nho: khong kha dung, hang doi tat");
 #endif
 }
 
@@ -81,14 +81,14 @@ void queueInit() {
 }
 
 void queuePush(const char* jsonEvent) {
-    if (!lfsOk) { Serial.printf("[QUEUE] skip (no LittleFS): %s\n", jsonEvent); return; }
+    if (!lfsOk) return;
     // Kiểm tra giới hạn kích thước
     File f = LittleFS.open(QUEUE_FILE, "r");
     if (f) {
         size_t sz = f.size();
         f.close();
         if (sz >= QUEUE_MAX_BYTES) {
-            Serial.println("[QUEUE] full, drop oldest");
+            Serial.println(">> Hang doi day, xoa su kien cu nhat");
             // Đọc tất cả, bỏ dòng đầu, ghi lại
             File fr = LittleFS.open(QUEUE_FILE, "r");
             String buf = "";

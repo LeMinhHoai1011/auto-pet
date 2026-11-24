@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import sys
+import threading
 
 import aiomqtt
 
@@ -8,6 +10,7 @@ from ..config import settings
 from ..database import async_session
 from ..models import FeedingLog, SensorLog, AlertLog, DeviceState
 from .push_service import send_push
+from .ws_manager import ws_manager
 
 logger = logging.getLogger("mqtt")
 
@@ -23,6 +26,8 @@ SUBSCRIBE_TOPICS = [
     f"{TOPIC_PREFIX}alert",
     f"{TOPIC_PREFIX}vision/pet_detected",
 ]
+
+_main_loop: asyncio.AbstractEventLoop | None = None
 
 
 async def _upsert_device_state(session, device_id: str, **kwargs):
@@ -123,10 +128,37 @@ async def _handle_message(topic: str, payload: str):
 
         await session.commit()
 
+    _schedule_ws_broadcast(suffix, payload)
     logger.info("Processed %s: %s", suffix, payload[:120])
 
 
-async def mqtt_listener():
+def _schedule_ws_broadcast(suffix: str, payload: str):
+    if _main_loop is not None and _main_loop.is_running():
+        asyncio.run_coroutine_threadsafe(_ws_broadcast(suffix, payload), _main_loop)
+
+
+async def _ws_broadcast(suffix: str, payload: str):
+    try:
+        data = {"topic": suffix}
+        try:
+            data["data"] = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            data["data"] = payload
+        await ws_manager.broadcast(data)
+    except Exception:
+        pass
+
+
+def _mqtt_thread_target():
+    if sys.platform == "win32":
+        loop = asyncio.SelectorEventLoop()
+    else:
+        loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(_mqtt_loop())
+
+
+async def _mqtt_loop():
     while True:
         try:
             async with aiomqtt.Client(
@@ -142,7 +174,7 @@ async def mqtt_listener():
                 async for msg in client.messages:
                     topic = str(msg.topic)
                     payload = msg.payload.decode() if msg.payload else ""
-                    asyncio.create_task(_handle_message(topic, payload))
+                    await _handle_message(topic, payload)
 
         except aiomqtt.MqttError as e:
             logger.warning("MQTT disconnected: %s — reconnecting in 5s", e)
@@ -150,3 +182,13 @@ async def mqtt_listener():
         except Exception as e:
             logger.exception("MQTT error: %s", e)
             await asyncio.sleep(5)
+
+
+async def mqtt_listener():
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
+    thread = threading.Thread(target=_mqtt_thread_target, daemon=True)
+    thread.start()
+    logger.info("MQTT listener thread started")
+    while thread.is_alive():
+        await asyncio.sleep(1)

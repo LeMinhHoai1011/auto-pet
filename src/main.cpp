@@ -67,6 +67,27 @@ static const char* feedSourceName(FeedSource src) {
     return names[src];
 }
 
+static const char* eventLabel(const char* type) {
+    if (strcmp(type, "fed") == 0)            return "Da cho an";
+    if (strcmp(type, "skipped") == 0)        return "Bo qua (bat con du)";
+    if (strcmp(type, "jam") == 0)            return "LOI: Ket thuc an";
+    if (strcmp(type, "bridge") == 0)         return "LOI: Hat khong xuong";
+    if (strcmp(type, "timeout") == 0)        return "LOI: Qua thoi gian";
+    if (strcmp(type, "not_eaten") == 0)      return "Thu cung chua an";
+    if (strcmp(type, "hopper_low") == 0)     return "Thung sap het";
+    if (strcmp(type, "humidity_high") == 0)  return "Do am cao";
+    if (strcmp(type, "stale_warn") == 0)     return "Thuc an co the thiu";
+    if (strcmp(type, "stale_discard") == 0)  return "Thuc an thiu - da xu ly";
+    if (strcmp(type, "interrupted_feed") == 0) return "Mat dien khi dang nha";
+    return type;
+}
+
+static const char* srcLabel(FeedSource src) {
+    static const char* labels[] = {"lich hen", "camera", "nut bam", "app/web"};
+    if ((int)src < 0 || (int)src >= (int)(sizeof(labels)/sizeof(labels[0]))) return "khac";
+    return labels[src];
+}
+
 static void logEvent(const char* type, FeedSource src, float grams,
                      float score = 0, float ageH = 0, float hum = 0) {
     char buf[200];
@@ -80,7 +101,9 @@ static void logEvent(const char* type, FeedSource src, float grams,
             "{\"t\":%lu,\"type\":\"%s\",\"src\":\"%s\",\"g\":%.1f}",
             (unsigned long)tkEpoch(), type, srcName, grams);
 
-    Serial.printf("[EVENT] %s\n", buf);
+    Serial.printf(">> %s | Nguon: %s", eventLabel(type), srcLabel(src));
+    if (grams > 0) Serial.printf(" | %.1fg", grams);
+    Serial.println();
     queuePush(buf);
     notifyEvent(buf);
 }
@@ -127,7 +150,7 @@ static void doFeed(float targetGrams, FeedSource src, int schedIdx) {
 
     // Stale lock
     if (stalenessScore() >= STALE_SCORE_LOCK) {
-        Serial.println("[FEED] blocked: stale lock");
+        Serial.println(">> Khong nha: thuc an cu con trong bat (thiu)");
         logEvent("skipped", src, 0);
         return;
     }
@@ -135,7 +158,7 @@ static void doFeed(float targetGrams, FeedSource src, int schedIdx) {
     // Claim this meal persistently before starting the motor. A reboot or jam
     // must not cause an automatic retry of a possibly partially dispensed meal.
     if (schedIdx >= 0 && !scheduleMarkFired(schedIdx)) {
-        Serial.println("[FEED] Cannot persist meal claim; blocked");
+        Serial.println(">> Khong the luu trang thai bua an; huy");
         return;
     }
     state = ST_FEEDING;
@@ -275,11 +298,28 @@ static void checkEnvironment() {
 // ─────────────────────────────────────────────
 static uint32_t lastStatePublishMs = 0;
 
+static uint32_t lastStatusPrintMs = 0;
+
 static void publishStatePeriodic() {
     uint32_t now = millis();
     if (now - lastStatePublishMs < 5000UL) return;
     lastStatePublishMs = now;
     notifyPublishState();
+
+    if (now - lastStatusPrintMs >= 10000UL) {
+        lastStatusPrintMs = now;
+        Serial.printf("-- Bat: %.0fg | Thung: %d%% | Am: %.0f%% | Nhiet: %.1fC",
+            getBowlGrams(), getHopperPct(), getHumidity(), getTemperature());
+        if (notifyMqttConnected())
+            Serial.print(" | MQTT: OK");
+        else
+            Serial.print(" | MQTT: Mat ket noi");
+        if (dispState.cooldownSec > 0) {
+            uint32_t s = dispState.cooldownSec;
+            Serial.printf(" | Cho %um%us nua", (unsigned)(s/60), (unsigned)(s%60));
+        }
+        Serial.println();
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -342,7 +382,7 @@ static void wifiTask() {
     WiFi.begin();
 #endif
 
-    Serial.printf("[WIFI] Connecting... retry in %lus\n", wifiRetryS);
+    Serial.printf(">> WiFi: Dang ket noi... thu lai sau %lus\r\n", wifiRetryS);
     wifiRetryS = min(wifiRetryS * 2, (uint32_t)WIFI_RETRY_MAX_S);
 }
 
@@ -351,7 +391,9 @@ static void wifiTask() {
 // ─────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n[BOOT] Pet Feeder v3.0 — Stepper + Camera");
+    Serial.println("\n========================================");
+    Serial.println("  May cho thu cung an tu dong v3.0");
+    Serial.println("========================================");
 
     pinMode(PIN_BUZZER, OUTPUT);
     pinMode(PIN_LED,    OUTPUT);
@@ -364,7 +406,7 @@ void setup() {
     // Kiểm tra mất điện giữa nhả
     NVSData& d = nvsGet();
     if (strcmp(d.feedState, "dispensing") == 0) {
-        Serial.printf("[BOOT] Interrupted feed detected! target=%.1fg\n", d.feedTarget);
+        Serial.printf("!! Phat hien mat dien khi dang nha %.1fg!\r\n", d.feedTarget);
         logEvent("interrupted_feed", SRC_SCHEDULE, d.feedTarget);
         strncpy(d.feedState, "done", sizeof(d.feedState) - 1);
         nvsMark(); nvsFlush(true);
@@ -386,7 +428,7 @@ void setup() {
 #endif
 
     state = ST_TIME_SYNC;
-    Serial.println("[BOOT] Ready");
+    Serial.println(">> He thong san sang!");
 }
 
 void loop() {

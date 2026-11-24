@@ -163,6 +163,7 @@ td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
 <div class="wrap">
   <header class="header">
     <h1>&#128062; Pet Feeder</h1>
+    <a href="/pet-demo" style="color:inherit">Demo nhận dạng</a>
     <span id="status-pill" class="status-pill status-offline">
       <span class="status-dot"></span>
       <span id="status-text">Đang kết nối...</span>
@@ -515,9 +516,48 @@ td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
     await Promise.all([loadDevice(), loadFeedHistory(), loadWeight(), loadEnv(), loadAlerts(), loadSchedules()]);
   };
 
+  // ── WebSocket real-time ──
+  function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(proto + '//' + location.host + '/ws');
+    ws.onmessage = function(e) {
+      try {
+        const msg = JSON.parse(e.data);
+        const d = msg.data;
+        if (!d || typeof d !== 'object') return;
+        const topic = msg.topic;
+        if (topic === 'sensor/weight') {
+          const v = d.bowl_g || d.g || d.value || 0;
+          const el = document.getElementById('t-bowl');
+          el.textContent = Math.round(v);
+          el.className = 'tile-value ' + tileColor(v, 5, 15);
+        } else if (topic === 'sensor/food_level') {
+          const v = d.hopper_pct || d.pct || d.value || 0;
+          const el = document.getElementById('t-hopper');
+          el.textContent = Math.round(v);
+          el.className = 'tile-value ' + tileColor(v, 15, 30);
+        } else if (topic === 'sensor/env') {
+          const temp = d.temp || d.temperature || 0;
+          const hum = d.hum || d.humidity || 0;
+          document.getElementById('t-temp').textContent = Number(temp).toFixed(1);
+          document.getElementById('t-hum').textContent = Math.round(hum);
+        } else if (topic === 'status' && typeof d === 'object') {
+          const online = d.online !== undefined ? d.online : true;
+          document.getElementById('status-pill').className = 'status-pill ' + (online ? 'status-online' : 'status-offline');
+          document.getElementById('status-text').textContent = online ? 'Online' : 'Offline';
+        } else if (topic === 'feeding' || topic === 'alert') {
+          setTimeout(refreshAll, 1000);
+        }
+      } catch(_) {}
+    };
+    ws.onclose = function() { setTimeout(connectWS, 3000); };
+    ws.onerror = function() { ws.close(); };
+  }
+  connectWS();
+
   // Init
   refreshAll();
-  refreshTimer = setInterval(refreshAll, 5000);
+  refreshTimer = setInterval(refreshAll, 10000);
 })();
 </script>
 </body>

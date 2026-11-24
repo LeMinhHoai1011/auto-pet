@@ -63,9 +63,9 @@ void sensorsInit() {
     }
     if (scale.is_ready()) {
         scale.tare();
-        Serial.println("[SENSOR] HX711 tare OK");
+        Serial.println(">> Can: san sang (da tru bi)");
     } else {
-        Serial.println("[SENSOR] HX711 not ready — skipped tare");
+        Serial.println("!! Can: chua san sang - kiem tra day noi");
     }
 
     pinMode(PIN_TRIG, OUTPUT);
@@ -74,7 +74,7 @@ void sensorsInit() {
     dht.begin();
 
     pinMode(PIN_BUTTON, INPUT_PULLUP);
-    Serial.println("[SENSOR] Init done");
+    Serial.println(">> Cam bien: san sang");
 }
 
 // ─────────────────────────────────────────────
@@ -127,28 +127,9 @@ static void sensorsUpdateLoadcell() {
     if ((now - lcLastMs) < LC_READ_INTERVAL_MS) return;
     lcLastMs = now;
 
-#if WOKWI_SIM
-    static uint32_t diagnosticMs = 0;
-    bool diagnosticDue = now - diagnosticMs >= 2000;
-#endif
-    if (!scale.is_ready()) {
-#if WOKWI_SIM
-        if (diagnosticDue) {
-            diagnosticMs = now;
-            Serial.println("[HX711] NOT READY: check DT/SCK wiring");
-        }
-#endif
-        return;
-    }
+    if (!scale.is_ready()) return;
     long counts = scale.read();
     float raw = (counts - scale.get_offset()) / scale.get_scale();
-#if WOKWI_SIM
-    if (diagnosticDue) {
-        diagnosticMs = now;
-        Serial.printf("[HX711] raw=%ld tare=%ld factor=%.2f grams=%.1f\n",
-                      counts, scale.get_offset(), scale.get_scale(), raw);
-    }
-#endif
     raw = max(0.0f, raw);
 
     // Median rejects isolated spikes without locking out real weight changes.

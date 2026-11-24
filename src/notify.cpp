@@ -39,7 +39,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
     memcpy(buf, payload, len);
     buf[len] = '\0';
 
-    Serial.printf("[MQTT] RX %s: %s\n", topic, buf);
+    Serial.printf(">> Nhan lenh: %s\r\n", buf);
 
     // ── RPi gửi pet detected ────────────────
     // topic: petfeeder/device01/vision/pet_detected
@@ -94,7 +94,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
                 updated[count++] = {(uint8_t)h, (uint8_t)m, g, true};
             }
             scheduleReplace(updated);
-            Serial.printf("[MQTT] Applied %d meals\n", count);
+            Serial.printf(">> Lich an: cap nhat %d cua an\r\n", count);
         } else if (strcmp(cmd, "TARE") == 0) {
             tareBowl();
         } else if (strcmp(cmd, "STATUS") == 0) {
@@ -115,8 +115,7 @@ static void mqttConnect() {
     if (mqtt.connect(MQTT_DEVICE_ID, MQTT_USER, MQTT_PASS,
                      MQTT_PUB_STATUS, 0, true, "offline")) {
         resetPetDetection();
-        Serial.printf("[MQTT] connected remote=%s:%d\n",
-                      mqttWiFi.remoteIP().toString().c_str(), mqttPort);
+        Serial.println(">> MQTT: Da ket noi thanh cong");
         mqttRetryS = 5;
 
         // Online
@@ -134,10 +133,10 @@ static void mqttConnect() {
 
         notifyPublishState();
 
-        Serial.printf("[MQTT] subscribed: %s, %s\n", sub1, sub2);
+        Serial.println(">> MQTT: Dang lang nghe lenh tu server/app");
     } else {
-        Serial.printf("[MQTT] %s:%d failed rc=%d retry in %lus\n",
-                      mqttHost, mqttPort, mqtt.state(), mqttRetryS);
+        Serial.printf(">> MQTT: Loi ket noi (ma=%d). Thu lai sau %lus\r\n",
+                      mqtt.state(), mqttRetryS);
         mqttRetryS = min(mqttRetryS * 2, (uint32_t)300);
     }
 }
@@ -166,7 +165,7 @@ static void flushQueue() {
 // ─────────────────────────────────────────────
 void notifyInit() {
     mqtt.setServer(mqttHost, mqttPort);
-    Serial.printf("[MQTT] Broker %s:%d\n", mqttHost, mqttPort);
+    Serial.printf(">> MQTT Broker: %s:%d\r\n", mqttHost, mqttPort);
     mqtt.setCallback(mqttCallback);
     mqtt.setBufferSize(1152);
 }
@@ -191,7 +190,7 @@ void notifyAlert(const char* alertType, const char* message) {
         "{\"t\":%lu,\"type\":\"%s\",\"msg\":\"%s\"}",
         (unsigned long)tkEpoch(), alertType, message);
 
-    Serial.printf("[ALERT] %s\n", jsonStr);
+    Serial.printf("!! CANH BAO: %s - %s\r\n", alertType, message);
     queuePush(jsonStr);
 
     if (mqtt.connected()) {
@@ -205,10 +204,7 @@ void notifyPublishState() {
     // Weight
     char buf[128];
     snprintf(buf, sizeof(buf), "{\"bowl_g\":%.1f}", getBowlGrams());
-    bool weightSent = mqtt.publish(MQTT_PUB_SENSOR, buf);
-    Serial.printf("[MQTT TX] %s %s remote=%s:%d payload=%s\n",
-                  MQTT_PUB_SENSOR, weightSent ? "sent" : "failed",
-                  mqttWiFi.remoteIP().toString().c_str(), mqttPort, buf);
+    mqtt.publish(MQTT_PUB_SENSOR, buf);
 
     // Hopper
     snprintf(buf, sizeof(buf), "{\"hopper_pct\":%d}", getHopperPct());

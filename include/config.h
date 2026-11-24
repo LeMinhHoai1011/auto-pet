@@ -35,7 +35,7 @@
 #define WOKWI_SIM         1   // 1: WiFi "Wokwi-GUEST", bỏ WiFiManager
 // Manual HX711 testing: delay jam/bridge checks, still stop at target or timeout.
 #define WOKWI_FEED_GRACE_MS 30000UL
-#define WOKWI_MQTT_PORT     1884 // Docker host port; avoid Windows Mosquitto on 1883.
+#define WOKWI_MQTT_PORT     1883 // Native Mosquitto on Windows; was 1884 for Docker.
 
 // ─────────────────────────────────────────────
 //  CHẾ ĐỘ XỬ LÝ THỨC ĂN THIU

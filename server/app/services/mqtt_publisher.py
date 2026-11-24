@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+import sys
 
 import aiomqtt
 
@@ -17,15 +19,29 @@ async def publish_command(command: str, payload: dict | None = None):
         data.update(payload)
 
     try:
-        async with aiomqtt.Client(
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, _publish_sync, topic, data)
+        return result
+    except Exception as e:
+        logger.warning("Publish failed: %s", e)
+        return False
+
+
+def _publish_sync(topic: str, data: dict) -> bool:
+    import paho.mqtt.publish as publish
+    try:
+        auth = None
+        if settings.mqtt_user:
+            auth = {"username": settings.mqtt_user, "password": settings.mqtt_pass}
+        publish.single(
+            topic,
+            payload=json.dumps(data),
             hostname=settings.mqtt_host,
             port=settings.mqtt_port,
-            username=settings.mqtt_user,
-            password=settings.mqtt_pass,
-        ) as client:
-            await client.publish(topic, json.dumps(data))
-            logger.info("Published %s → %s", topic, data)
-            return True
+            auth=auth,
+        )
+        logger.info("Published %s → %s", topic, data)
+        return True
     except Exception as e:
         logger.warning("Publish failed: %s", e)
         return False

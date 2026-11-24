@@ -13,7 +13,7 @@ DisplayState dispState = {};
 void displayInit() {
     Wire.begin(PIN_SDA, PIN_SCL);
     if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-        Serial.println("[OLED] not found");
+        Serial.println("!! Man hinh OLED: khong tim thay");
         return;
     }
     oled.clearDisplay();

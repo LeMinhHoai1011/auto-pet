@@ -91,9 +91,9 @@ FeedResult feederDispense(float targetGrams, float& actualGrams) {
     FeedResult result = FEED_OK;
     uint32_t feedStartMs = millis();
     const uint32_t FEED_TIMEOUT_MS = 60000;
+    Serial.printf(">> Bat dau nha %.1fg thuc an...\r\n", targetGrams);
 #if WOKWI_SIM
-    Serial.printf("[TEST] HX711 ready: %lus to adjust load; target=%.1fg\n",
-                  WOKWI_FEED_GRACE_MS / 1000UL, targetGrams);
+    Serial.printf(">> (Wokwi: %lus de keo thanh can)\r\n", WOKWI_FEED_GRACE_MS / 1000UL);
 #endif
 
     while (true) {
@@ -120,14 +120,13 @@ FeedResult feederDispense(float targetGrams, float& actualGrams) {
         if (elapsed < WOKWI_FEED_GRACE_MS) {
             unsigned long left = (WOKWI_FEED_GRACE_MS - elapsed + 999) / 1000;
             snprintf(dispState.errorMsg, sizeof(dispState.errorMsg), "TEST: con %lus keo can", left);
-            Serial.printf("[TEST] adjust HX711: %lus remaining\n", left);
         } else {
             dispState.errorMsg[0] = '\0';
         }
 #endif
         displayLoop();
-        Serial.printf("[FEED] bowl=%.1fg added=%.1fg target=%.1fg encoder=%ld\n",
-                      nowGrams, actualGrams, targetGrams, enc);
+        Serial.printf("   Bat: %.1fg | Da nha: %.1fg / %.1fg\r\n",
+                      nowGrams, actualGrams, targetGrams);
 
         if (actualGrams >= targetGrams) {
             result = FEED_OK;
