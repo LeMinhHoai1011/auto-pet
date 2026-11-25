@@ -40,18 +40,6 @@
       "attrs": { "humidity": "50", "temperature": "25" }
     },
     {
-      "type": "wokwi-pushbutton",
-      "id": "btn",
-      "top": 400, "left": -100,
-      "attrs": { "color": "green" }
-    },
-    {
-      "type": "wokwi-buzzer",
-      "id": "buzzer",
-      "top": 400, "left": 60,
-      "attrs": {}
-    },
-    {
       "type": "wokwi-led",
       "id": "led",
       "top": 400, "left": 220,
@@ -99,12 +87,6 @@
     ["esp:3V3",   "dht22:VCC",        "red",     []],
     ["esp:GND.2", "dht22:GND",        "black",   []],
     ["esp:D15",   "dht22:SDA",        "green",   []],
-
-    ["esp:D32",   "btn:1.l",          "green",   []],
-    ["esp:GND.2", "btn:2.l",          "black",   []],
-
-    ["esp:D23",   "buzzer:1",         "orange",  []],
-    ["esp:GND.2", "buzzer:2",         "black",   []],
 
     ["esp:D2",    "led:A",            "blue",    []],
     ["esp:GND.2", "led:C",            "black",   []],
