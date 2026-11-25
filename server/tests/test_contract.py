@@ -39,17 +39,14 @@ class MqttTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(update.call_args.kwargs, {"online": state == "online"})
 
     async def test_command_payload_and_failure(self):
-        client = AsyncMock()
-        context = MagicMock()
-        context.__aenter__ = AsyncMock(return_value=client)
-        context.__aexit__ = AsyncMock(return_value=False)
-        with patch.object(mqtt_publisher.aiomqtt, "Client", return_value=context):
+        with patch("paho.mqtt.publish.single") as publish:
             meals = [{"h": 7, "m": 30, "g": 35}]
             self.assertTrue(await mqtt_publisher.publish_command("SCHEDULE", {"meals": meals}))
-            topic, body = client.publish.call_args.args
+            topic = publish.call_args.args[0]
+            body = publish.call_args.kwargs["payload"]
             self.assertTrue(topic.endswith("/command"))
             self.assertEqual(json.loads(body), {"cmd": "SCHEDULE", "meals": meals})
-            client.publish.side_effect = ConnectionError("test disconnect")
+            publish.side_effect = ConnectionError("test disconnect")
             self.assertFalse(await mqtt_publisher.publish_command("STATUS"))
 
 

@@ -23,14 +23,23 @@ from ..models import (
 from ..schemas import (
     RecognitionSessionOut, RecognitionLogOut, SessionAssign, PipelineStatusOut,
 )
+from ..recognition import torch_available, torch_error
+from ..services.pet_meals import request_photo_feed
 
 logger = logging.getLogger("api.recognition")
+
+
+def _require_torch():
+    if not torch_available:
+        raise HTTPException(503, torch_error)
+
 
 router = APIRouter(prefix="/api/recognition", tags=["recognition"])
 
 
 @router.get("/status", response_model=PipelineStatusOut)
 async def get_pipeline_status():
+    _require_torch()
     from ..recognition.pipeline import pipeline
     state = pipeline.get_state()
     return PipelineStatusOut(
@@ -49,19 +58,19 @@ async def get_pipeline_status():
 
 @router.post("/start")
 async def start_pipeline(mode: str = Query("observe")):
+    _require_torch()
     from ..recognition.pipeline import pipeline, PipelineMode
     try:
         pm = PipelineMode(mode)
     except ValueError:
         raise HTTPException(400, f"Invalid mode: {mode}")
-    if pm == PipelineMode.ACTIVE:
-        return {"ok": False, "error": "Active mode not available in Phase 2 (shadow mode only)"}
     pipeline.start(pm)
     return {"ok": True, "mode": pm.value}
 
 
 @router.post("/stop")
 async def stop_pipeline():
+    _require_torch()
     from ..recognition.pipeline import pipeline
     pipeline.stop()
     return {"ok": True}
@@ -70,6 +79,7 @@ async def stop_pipeline():
 @router.get("/stream")
 async def video_stream():
     """MJPEG video stream with bounding boxes and recognition overlays."""
+    _require_torch()
     from ..recognition.pipeline import pipeline
 
     async def generate():
@@ -136,9 +146,10 @@ async def video_stream():
 @router.post("/identify")
 async def identify_from_image(
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    feed_pet_id: int | None = Query(None, gt=0),
 ):
     """Identify a cat from a single uploaded image."""
+    _require_torch()
     data = await file.read()
     nparr = np.frombuffer(data, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -149,11 +160,13 @@ async def identify_from_image(
     from ..recognition.face_detector import detect_cat_face
     from ..recognition.quality_filter import assess_quality
     from ..recognition.embedding import extract_embedding
-    from ..recognition.matcher import embedding_store
+    from ..recognition.matcher import RecognitionStatus, embedding_store
 
     img_h, img_w = img.shape[:2]
 
     dets = detect_cats(img)
+    if feed_pet_id is not None and len(dets) != 1:
+        raise HTTPException(422, "Ảnh phải có đúng một thú cưng.")
     if not dets:
         all_dets = detect_all(img)
         debug_classes = [
@@ -170,6 +183,7 @@ async def identify_from_image(
 
     has_registered = embedding_store.pet_count > 0
     results = []
+    can_request_feed = False
     for det in dets:
         face = detect_cat_face(img, det.bbox)
         x1, y1, x2, y2 = face.bbox
@@ -203,6 +217,10 @@ async def identify_from_image(
 
         emb = extract_embedding(crop)
         match = embedding_store.match(emb)
+        can_request_feed = (
+            len(dets) == 1 and quality.passed and match.status == RecognitionStatus.KNOWN
+            and match.pet_id is not None
+        )
 
         results.append({
             "bbox": det.bbox,
@@ -217,7 +235,16 @@ async def identify_from_image(
             "quality": quality.reason.value,
         })
 
-    return {"status": "ok", "detections": len(dets), "results": results}
+    response = {"status": "ok", "detections": len(dets), "results": results,
+                "can_request_feed": can_request_feed}
+    if feed_pet_id is not None:
+        if not can_request_feed or results[0]["pet_id"] != feed_pet_id:
+            raise HTTPException(422, "Ảnh không xác nhận được đúng thú cưng đã chọn.")
+        request_id, blocked_reason = await request_photo_feed(feed_pet_id)
+        if request_id is None:
+            raise HTTPException(409, blocked_reason)
+        response["feed_request_id"] = request_id
+    return response
 
 
 @router.get("/sessions", response_model=list[RecognitionSessionOut])
@@ -270,6 +297,7 @@ async def assign_session(
     db: AsyncSession = Depends(get_db),
 ):
     """Assign collected images from a session to a pet."""
+    _require_torch()
     result = await db.execute(
         select(RecognitionSession).where(RecognitionSession.session_id == session_id)
     )

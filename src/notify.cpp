@@ -18,6 +18,11 @@ static uint32_t     mqttRetryS      = 5;
 // Lệnh feed từ xa (MQTT command hoặc app)
 static bool  pendingFeed   = false;
 static float pendingGrams  = 0;
+static float pendingPetGrams = 0;
+static uint32_t pendingPetUntil = 0;
+static uint32_t pendingPetReceivedMs = 0;
+static char pendingPetId[64] = {};
+static char lastPetId[64] = {};
 
 #include "secrets.h"
 
@@ -78,6 +83,36 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
                 pendingFeed  = true;
                 pendingGrams = g;
             }
+        } else if (strcmp(cmd, "PET_FEED") == 0) {
+            const char* id = doc["id"] | "";
+            float g = doc["g"] | 0.0f;
+            uint32_t until = doc["until"] | 0UL;
+            if (strlen(id) != 32 || strspn(id, "0123456789abcdef") != 32) {
+                Serial.println(">> PET_FEED bo qua: invalid_id");
+                return;
+            }
+            if (strcmp(id, lastPetId) == 0 || strcmp(id, pendingPetId) == 0) {
+                Serial.println(">> PET_FEED bo qua: duplicate");
+                return;
+            }
+            if (pendingPetId[0] || g < 1 || g > DAILY_MAX_GRAMS || !isfinite(g) || !until) {
+                notifyPetFeedResult(id, 0, pendingPetId[0] ? "busy" : "invalid_request");
+                return;
+            }
+#if !WOKWI_SIM
+            uint32_t now = tkEpoch();
+            if (!tkTimeValid() || until < now || until - now > 15) {
+                Serial.printf(">> PET_FEED UTC: ESP32=%lu until=%lu\r\n",
+                              (unsigned long)now, (unsigned long)until);
+                notifyPetFeedResult(id, 0, "clock_or_expiry");
+                return;
+            }
+#endif
+            strlcpy(pendingPetId, id, sizeof(pendingPetId));
+            pendingPetGrams = g;
+            pendingPetUntil = until;
+            pendingPetReceivedMs = millis();
+            Serial.printf(">> PET_FEED da xep hang: %.1fg\r\n", g);
         } else if (strcmp(cmd, "SCHEDULE") == 0) {
             JsonArrayConst incoming = doc["meals"].as<JsonArrayConst>();
             if (incoming.isNull() || incoming.size() > MAX_MEALS) return;
@@ -219,5 +254,31 @@ void notifyPublishState() {
 bool  notifyHasPendingFeed()   { return pendingFeed; }
 float notifyGetPendingGrams()  { return pendingGrams; }
 void  notifyClearPendingFeed() { pendingFeed = false; pendingGrams = 0; }
+
+bool notifyTakePetFeed(float& grams, char (&requestId)[64]) {
+    if (!pendingPetId[0]) return false;
+    strlcpy(requestId, pendingPetId, sizeof(requestId));
+    pendingPetId[0] = '\0';
+    bool expired = millis() - pendingPetReceivedMs > 10000UL;
+#if !WOKWI_SIM
+    expired = expired || !tkTimeValid() || tkEpoch() > pendingPetUntil;
+#endif
+    if (expired) {
+        notifyPetFeedResult(requestId, 0, "expired_in_queue");
+        return false;
+    }
+    strlcpy(lastPetId, requestId, sizeof(lastPetId));
+    grams = pendingPetGrams;
+    return true;
+}
+
+void notifyPetFeedResult(const char* requestId, float actualGrams, const char* reason) {
+    char buf[192];
+    snprintf(buf, sizeof(buf),
+             "{\"type\":\"pet_feed_result\",\"id\":\"%s\",\"actual_g\":%.1f,\"reason\":\"%s\"}",
+             requestId, actualGrams, reason);
+    Serial.printf(">> PET_FEED %s: %s (%.1fg)\r\n", requestId, reason, actualGrams);
+    notifyEvent(buf);
+}
 
 bool notifyMqttConnected() { return mqtt.connected(); }

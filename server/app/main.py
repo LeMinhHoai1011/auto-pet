@@ -4,14 +4,15 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from .database import init_db
 from .routers import device, feed, schedule, alerts, sensors, push, pets, recognition
 from .services.mqtt_service import mqtt_listener
+from .services.pet_meals import monitor_pet_meals
 from .services.ws_manager import ws_manager
 
 logging.basicConfig(
@@ -23,6 +24,14 @@ DASHBOARD_DIR = Path(__file__).resolve().parent.parent / "dashboard"
 
 
 STORAGE_DIR = Path(__file__).resolve().parent.parent / "storage"
+
+from .recognition import torch_available, torch_error
+
+RECOGNITION_BLOCKED = torch_error or "Windows Application Control blocked a recognition dependency."
+
+
+def _is_application_control_error(exc: OSError) -> bool:
+    return getattr(exc, "winerror", None) == 4551
 
 
 async def _load_embedding_store():
@@ -54,101 +63,40 @@ async def _load_embedding_store():
         logging.getLogger("app").exception("Failed to load embedding store")
 
 
-def _setup_auto_feed():
-    """Register callback: when AI confirms a pet, auto-feed its portion."""
-    import asyncio
-    from .recognition.pipeline import pipeline
-    from .database import async_session
-    from .models import Pet, FeedingLog
-    from .services.mqtt_publisher import publish_command
-    from sqlalchemy import select, func
-    from datetime import datetime, timedelta
-
-    _logger = logging.getLogger("auto_feed")
-    _main_loop = asyncio.get_event_loop()
-
-    def on_pet_confirmed(pet_id: int, pet_name: str, tracker_id: int):
-        asyncio.run_coroutine_threadsafe(
-            _do_auto_feed(pet_id, pet_name, tracker_id), _main_loop
-        )
-
-    async def _do_auto_feed(pet_id: int, pet_name: str, tracker_id: int):
-        try:
-            async with async_session() as session:
-                result = await session.execute(select(Pet).where(Pet.id == pet_id))
-                pet = result.scalar_one_or_none()
-                if not pet or not pet.auto_feed:
-                    _logger.info("Pet %s: auto_feed disabled, skipping", pet_name)
-                    return
-
-                now = datetime.utcnow()
-                today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                fed_today = await session.execute(
-                    select(func.coalesce(func.sum(FeedingLog.actual_grams), 0))
-                    .where(FeedingLog.created_at >= today_start)
-                    .where(FeedingLog.source == f"ai_pet_{pet_id}")
-                )
-                total_today = fed_today.scalar() or 0
-
-                if total_today + pet.portion_grams > pet.daily_limit_grams:
-                    _logger.info("Pet %s: daily limit %.0fg reached (fed %.0fg), skipping",
-                                 pet_name, pet.daily_limit_grams, total_today)
-                    return
-
-                recent = await session.execute(
-                    select(FeedingLog)
-                    .where(FeedingLog.source == f"ai_pet_{pet_id}")
-                    .where(FeedingLog.created_at >= now - timedelta(minutes=pet.min_feed_interval_min))
-                    .limit(1)
-                )
-                if recent.scalar_one_or_none():
-                    _logger.info("Pet %s: fed within last %d min, skipping",
-                                 pet_name, pet.min_feed_interval_min)
-                    return
-
-            _logger.info("Auto-feed: %s → %.0fg", pet_name, pet.portion_grams)
-            await publish_command("FEED", {"g": pet.portion_grams})
-
-            async with async_session() as session:
-                session.add(FeedingLog(
-                    device_id=settings.device_id,
-                    source=f"ai_pet_{pet_id}",
-                    result="SENT",
-                    actual_grams=pet.portion_grams,
-                ))
-                await session.commit()
-
-            await ws_manager.broadcast({
-                "topic": "auto_feed",
-                "data": {"pet_id": pet_id, "pet_name": pet_name, "grams": pet.portion_grams},
-            })
-
-        except Exception:
-            _logger.exception("Auto-feed error for pet %s", pet_name)
-
-    pipeline.set_on_pet_confirmed(on_pet_confirmed)
-    _logger.info("Auto-feed callback registered")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    await _load_embedding_store()
-    _setup_auto_feed()
+    pipeline = None
+    if torch_available:
+        await _load_embedding_store()
+        try:
+            from .recognition.pipeline import pipeline
+        except OSError as exc:
+            if not _is_application_control_error(exc):
+                raise
+            logging.getLogger("app").warning("%s %s", RECOGNITION_BLOCKED, exc)
+    else:
+        logging.getLogger("app").warning(
+            "AI recognition disabled: %s", RECOGNITION_BLOCKED
+        )
     task = asyncio.create_task(mqtt_listener())
+    meal_task = asyncio.create_task(monitor_pet_meals(pipeline))
     logging.getLogger("app").info("Server started — MQTT listener running")
-    yield
-    task.cancel()
-    # Cleanup recognition resources
     try:
-        from .recognition.pipeline import pipeline
-        pipeline.stop()
-        from .recognition.detector import unload_model as unload_yolo
-        from .recognition.embedding import unload_model as unload_emb
-        unload_yolo()
-        unload_emb()
-    except Exception:
-        pass
+        yield
+    finally:
+        task.cancel()
+        meal_task.cancel()
+        await asyncio.gather(meal_task, return_exceptions=True)
+        if pipeline is not None:
+            try:
+                pipeline.stop()
+                from .recognition.detector import unload_model as unload_yolo
+                from .recognition.embedding import unload_model as unload_emb
+                unload_yolo()
+                unload_emb()
+            except Exception:
+                logging.getLogger("app").exception("Failed to clean up recognition resources")
 
 
 app = FastAPI(
@@ -156,6 +104,13 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(OSError)
+async def handle_application_control_error(request: Request, exc: OSError):
+    if not _is_application_control_error(exc):
+        raise exc
+    return JSONResponse(status_code=503, content={"detail": RECOGNITION_BLOCKED})
 
 app.add_middleware(
     CORSMiddleware,
@@ -177,7 +132,12 @@ app.include_router(recognition.router)
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "pet-feeder-api"}
+    return {
+        "status": "ok",
+        "service": "pet-feeder-api",
+        "ai_available": torch_available,
+        "ai_error": torch_error or None,
+    }
 
 
 @app.websocket("/ws")

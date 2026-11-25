@@ -51,6 +51,37 @@ class Schedule(Base):
     grams: Mapped[float] = mapped_column(Float, default=30.0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=_NOW)
+    assignment: Mapped["SchedulePet | None"] = relationship(
+        lazy="selectin", cascade="all, delete-orphan"
+    )
+
+    @property
+    def pet_id(self) -> int | None:
+        return self.assignment.pet_id if self.assignment else None
+
+
+class SchedulePet(Base):
+    __tablename__ = "schedule_pets"
+
+    schedule_id: Mapped[int] = mapped_column(
+        ForeignKey("schedules.id", ondelete="CASCADE"), primary_key=True
+    )
+    key: Mapped[str] = mapped_column(String(32), unique=True)
+    pet_id: Mapped[int] = mapped_column(Integer, index=True)
+
+
+class PetMeal(Base):
+    __tablename__ = "pet_meals"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(32), index=True)
+    pet_id: Mapped[int] = mapped_column(Integer, index=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    requested_at: Mapped[datetime | None] = mapped_column(DateTime)
+    dispensed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    eaten_at: Mapped[datetime | None] = mapped_column(DateTime)
+    grams: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(24))
 
 
 class DeviceState(Base):

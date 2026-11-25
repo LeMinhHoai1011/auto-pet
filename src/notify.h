@@ -17,6 +17,9 @@ void notifyPublishState();
 bool     notifyHasPendingFeed();
 float    notifyGetPendingGrams();
 void     notifyClearPendingFeed();
+bool     notifyTakePetFeed(float& grams, char (&requestId)[64]);
+void     notifyPetFeedResult(const char* requestId, float actualGrams,
+                             const char* reason = "dispense_finished");
 
 // MQTT connected?
 bool notifyMqttConnected();

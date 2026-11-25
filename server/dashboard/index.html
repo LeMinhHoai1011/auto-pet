@@ -396,6 +396,7 @@ td{padding:10px;border-bottom:1px solid var(--border)}
               <button class="btn btn-outline" id="btn-ai-stop" onclick="stopAI()" disabled>D&#7915;ng AI</button>
               <button class="btn btn-outline" onclick="identifyFile()">Ch&#7885;n &#7843;nh nh&#7853;n di&#7879;n</button>
               <input type="file" id="ai-file-input" accept="image/*" style="display:none" onchange="doIdentifyFile(this)">
+              <button class="btn btn-green" id="ai-photo-feed" style="display:none" hidden>Xác nhận nhả thật</button>
             </div>
           </div>
           <div>
@@ -461,7 +462,10 @@ td{padding:10px;border-bottom:1px solid var(--border)}
             <h2>L&#7883;ch cho &#259;n</h2>
             <p>Thi&#7871;t l&#7853;p l&#7883;ch v&#224; &#273;&#7883;nh l&#432;&#7907;ng theo thi&#7871;t b&#7883; ho&#7863;c m&#232;o</p>
           </div>
-          <button class="btn btn-green" onclick="showAddScheduleModal()">+ Th&#234;m l&#7883;ch &#259;n</button>
+          <div>
+            <button class="btn btn-outline" onclick="startAI('active')">Bật nhận diện cho lịch riêng</button>
+            <button class="btn btn-green" onclick="showAddScheduleModal()">+ Th&#234;m l&#7883;ch &#259;n</button>
+          </div>
         </div>
         <div id="schedule-list">
           <div class="loading"><div class="spinner"></div></div>
@@ -614,6 +618,12 @@ td{padding:10px;border-bottom:1px solid var(--border)}
   <div class="modal">
     <h3>Th&#234;m l&#7883;ch cho &#259;n</h3>
     <div class="form-group">
+      <label for="sched-pet">Thú cưng</label>
+      <select class="input" id="sched-pet">
+        <option value="">Lịch chung</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label>Gi&#7901;</label>
       <input type="number" class="input" id="sched-hour" min="0" max="23" value="7" style="width:80px">
     </div>
@@ -656,6 +666,7 @@ td{padding:10px;border-bottom:1px solid var(--border)}
 
 <div id="toast" class="toast"></div>
 
+<script src="/photo-feed.js"></script>
 <script>
 (function(){
   // ═══ Helpers ═══
@@ -720,7 +731,17 @@ td{padding:10px;border-bottom:1px solid var(--border)}
 
   // ═══ Modals ═══
   window.showAddPetModal = function(){document.getElementById('modal-add-pet').classList.add('open')};
-  window.showAddScheduleModal = function(){document.getElementById('modal-add-schedule').classList.add('open')};
+  window.showAddScheduleModal = async function(){
+    try{
+      const pets=await api('/api/pets/');
+      const select=document.getElementById('sched-pet');
+      select.replaceChildren(new Option('Lịch chung',''));
+      for(const pet of pets){
+        if(pet.embedding_count>0)select.add(new Option(pet.name,pet.id));
+      }
+      document.getElementById('modal-add-schedule').classList.add('open');
+    }catch(e){toast('Không tải được danh sách thú cưng',false)}
+  };
   window.hideModal = function(id){document.getElementById(id).classList.remove('open')};
 
   // ═══ Device Status ═══
@@ -842,9 +863,18 @@ td{padding:10px;border-bottom:1px solid var(--border)}
   // ═══ AI Page ═══
   async function loadAI(){
     try{
-      const s=await api('/api/recognition/status');
+      const r=await fetch('/api/recognition/status');
+      if(r.status===503){
+        const err=await r.json();
+        const badge=document.getElementById('ai-status-badge');
+        badge.textContent='AI blocked';badge.className='badge badge-red';
+        document.getElementById('ai-recog-name').textContent=err.detail||'PyTorch unavailable';
+        return;
+      }
+      const s=await r.json();
       const badge=document.getElementById('ai-status-badge');
       if(s.mode==='off'){badge.textContent='AI off';badge.className='badge badge-muted'}
+      else if(s.mode==='active'){badge.textContent='Lịch riêng đang hoạt động';badge.className='badge badge-green'}
       else if(s.mode==='observe'){badge.textContent='AI running';badge.className='badge badge-green'}
       else if(s.mode==='register'){badge.textContent='Registering';badge.className='badge badge-orange'}
     }catch(e){}
@@ -869,10 +899,10 @@ td{padding:10px;border-bottom:1px solid var(--border)}
     }catch(e){}
   }
 
-  window.startAI = async function(){
+  window.startAI = async function(mode='observe'){
     document.getElementById('btn-ai-start').disabled=true;
     try{
-      const r=await apiPost('/api/recognition/start?mode=observe');
+      const r=await apiPost('/api/recognition/start?mode='+mode);
       if(r.ok){
         document.getElementById('btn-ai-stop').disabled=false;
         document.getElementById('ai-camera-feed').src='/api/recognition/stream';
@@ -881,7 +911,8 @@ td{padding:10px;border-bottom:1px solid var(--border)}
         startAIPoll();
         toast('AI đã bắt đầu',true);
         const badge=document.getElementById('ai-status-badge');
-        badge.textContent='AI running';badge.className='badge badge-green';
+        badge.textContent=mode==='active'?'Lịch riêng đang hoạt động':'AI running';
+        badge.className='badge badge-green';
       }else{toast(r.error||'Lỗi',false);document.getElementById('btn-ai-start').disabled=false}
     }catch(e){toast('Lỗi kết nối',false);document.getElementById('btn-ai-start').disabled=false}
   };
@@ -915,12 +946,16 @@ td{padding:10px;border-bottom:1px solid var(--border)}
   window.identifyFile = function(){document.getElementById('ai-file-input').click()};
   window.doIdentifyFile = async function(input){
     const f=input.files[0];if(!f)return;input.value='';
+    const feedButton=document.getElementById('ai-photo-feed');
+    configurePhotoFeed(feedButton);
     const fd=new FormData();fd.append('file',f);
     document.getElementById('ai-recog-name').textContent='Đang phân tích...';
     try{
       const r=await fetch('/api/recognition/identify',{method:'POST',body:fd});
       const data=await r.json();
-      if(data.status==='NO_CAT'){
+      if(!r.ok)throw new Error(typeof data.detail==='string' ? data.detail : 'Không nhận diện được ảnh');
+      configurePhotoFeed(feedButton,f,data,toast);
+      if(data.status==='NO_CAT'||data.status==='NO_PET'){
         document.getElementById('ai-recog-name').textContent='Không phát hiện mèo';
         document.getElementById('ai-recog-status').innerHTML='<span class="badge badge-muted">NO_CAT</span>';
         document.getElementById('ai-recog-score').textContent='';
@@ -1061,7 +1096,8 @@ td{padding:10px;border-bottom:1px solid var(--border)}
   // ═══ Schedules ═══
   async function loadSchedules(){
     try{
-      const rows=await api('/api/schedule/');
+      const [rows,pets]=await Promise.all([api('/api/schedule/'),api('/api/pets/?active_only=false')]);
+      const names=new Map(pets.map(pet=>[pet.id,pet.name]));
       const el=document.getElementById('schedule-list');
       if(!rows.length){el.innerHTML='<div class="empty-state">Chưa có lịch cho ăn</div>';return}
       el.innerHTML=rows.map(r=>{
@@ -1069,7 +1105,7 @@ td{padding:10px;border-bottom:1px solid var(--border)}
         const mm=String(r.minute).padStart(2,'0');
         return `<div class="sched-row">
           <span class="sched-time">${hh}:${mm}</span>
-          <span class="sched-info">${r.grams} g &middot; Hằng ngày</span>
+          <span class="sched-info">${r.grams} g &middot; ${esc(r.pet_id ? names.get(r.pet_id) || 'Thú cưng' : 'Lịch chung')}</span>
           <button class="toggle ${r.enabled?'on':''}" onclick="toggleSchedule(${r.id},${!r.enabled})"></button>
           <span style="font-size:14px;font-weight:600;cursor:pointer" onclick="editSchedule(${r.id})">Chỉnh sửa</span>
         </div>`;
@@ -1091,7 +1127,11 @@ td{padding:10px;border-bottom:1px solid var(--border)}
     const minute=parseInt(document.getElementById('sched-minute').value);
     const grams=parseInt(document.getElementById('sched-grams').value);
     try{
-      await apiPost('/api/schedule/',{hour,minute,grams,enabled:true});
+      const assigned=document.getElementById('sched-pet').value;
+      const schedule=await apiPost('/api/schedule/',{
+        hour,minute,grams,enabled:true,pet_id:assigned ? Number(assigned) : null
+      });
+      if(!schedule.id){toast(typeof schedule.detail==='string' ? schedule.detail : 'Không lưu được lịch',false);return}
       hideModal('modal-add-schedule');
       loadSchedules();
       toast('Thêm lịch thành công',true);

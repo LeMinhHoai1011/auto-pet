@@ -16,8 +16,14 @@ from sqlalchemy.orm import selectinload
 from ..database import get_db
 from ..models import Pet, PetImage, PetEmbedding
 from ..schemas import PetCreate, PetUpdate, PetOut, PetImageOut
+from ..recognition import torch_available, torch_error
 
 logger = logging.getLogger("api.pets")
+
+
+def _require_torch():
+    if not torch_available:
+        raise HTTPException(503, torch_error)
 
 router = APIRouter(prefix="/api/pets", tags=["pets"])
 
@@ -106,6 +112,7 @@ async def upload_pet_images(
     if not pet:
         raise HTTPException(404, "Pet not found")
 
+    _require_torch()
     from ..recognition.registry import process_upload_image, save_pet_image
     from ..recognition.embedding import get_model_version
 
@@ -222,6 +229,7 @@ async def delete_pet_image(
 @router.post("/{pet_id}/embeddings/rebuild")
 async def rebuild_embeddings(pet_id: int, db: AsyncSession = Depends(get_db)):
     """Rebuild all embeddings for a pet from their confirmed images."""
+    _require_torch()
     result = await db.execute(select(Pet).where(Pet.id == pet_id))
     pet = result.scalar_one_or_none()
     if not pet:

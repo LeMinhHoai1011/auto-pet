@@ -75,22 +75,17 @@ class RecognitionPipeline:
         self._observations: dict[int, CatObservation] = {}
         self._lock = threading.Lock()
         self._running = False
+        self._feeding_presence: tuple[int, float, float] | None = None
         self._thread: threading.Thread | None = None
         self._ai_fps: float = 0.0
         self._process_time_ms: float = 0.0
         self._total_collected: int = 0
         self._last_ai_time: float = 0.0
         self._frame_callbacks: list = []
-        self._fed_tracker_ids: set[int] = set()
-        self._on_pet_confirmed_cb = None
 
         # Registration state
         self._registering_pet_id: int | None = None
         self._registration_session: AppearanceSession | None = None
-
-    def set_on_pet_confirmed(self, callback) -> None:
-        """Set callback(pet_id, pet_name, tracker_id) called when pet is confirmed."""
-        self._on_pet_confirmed_cb = callback
 
     @property
     def mode(self) -> PipelineMode:
@@ -112,12 +107,12 @@ class RecognitionPipeline:
 
     def stop(self) -> None:
         self._running = False
+        self._feeding_presence = None
         camera_manager.stop()
         self._mode = PipelineMode.OFF
         self._observations.clear()
         self._collector.reset()
         self._tracker.reset()
-        self._fed_tracker_ids.clear()
         logger.info("Pipeline stopped")
 
     def start_registration(self, pet_id: int | None = None) -> None:
@@ -135,6 +130,11 @@ class RecognitionPipeline:
         self._mode = PipelineMode.OBSERVE
         logger.info("Registration mode stopped")
         return session
+
+    def feeding_presence(self) -> tuple[int, float, float] | None:
+        if self._running and self._mode == PipelineMode.ACTIVE:
+            return self._feeding_presence
+        return None
 
     def get_state(self) -> PipelineState:
         with self._lock:
@@ -185,6 +185,7 @@ class RecognitionPipeline:
             self._process_time_ms = (time.time() - t0) * 1000
             self._ai_fps = 1000.0 / max(self._process_time_ms, 1)
         except Exception:
+            self._feeding_presence = None
             logger.exception("Pipeline frame processing error")
 
         # Notify frame callbacks (for streaming)
@@ -218,6 +219,7 @@ class RecognitionPipeline:
         self._collector.cleanup_stale(max_age_sec=10.0)
 
         # 5. Process each tracked cat
+        present_pet = None
         for cat in tracked:
             obs = self._observations.get(cat.tracker_id)
             if obs is None:
@@ -260,17 +262,11 @@ class RecognitionPipeline:
                         obs.vote_total += 1
 
                         if obs.identity_votes[match.pet_id] >= cfg.CONFIRMATION_FRAMES:
-                            was_unconfirmed = obs.confirmed_identity is None
                             obs.confirmed_identity = match.pet_id
                             obs.confirmed_name = match.pet_name
+                            if len(detections) == len(tracked) == 1:
+                                present_pet = match.pet_id
 
-                            if was_unconfirmed and cat.tracker_id not in self._fed_tracker_ids:
-                                self._fed_tracker_ids.add(cat.tracker_id)
-                                if self._on_pet_confirmed_cb and self._mode == PipelineMode.ACTIVE:
-                                    try:
-                                        self._on_pet_confirmed_cb(match.pet_id, match.pet_name, cat.tracker_id)
-                                    except Exception:
-                                        logger.exception("Auto-feed callback failed")
                 except Exception:
                     logger.exception("Embedding extraction/matching failed")
                     obs.match_result = MatchResult(status=RecognitionStatus.MODEL_ERROR)
@@ -288,6 +284,15 @@ class RecognitionPipeline:
                 self._total_collected += 1
                 if self._mode == PipelineMode.REGISTER:
                     self._registration_session = session
+
+        previous = self._feeding_presence
+        if present_pet is None or self._mode != PipelineMode.ACTIVE:
+            self._feeding_presence = None
+        else:
+            since = timestamp
+            if previous and previous[0] == present_pet and timestamp - previous[2] <= 3:
+                since = previous[1]
+            self._feeding_presence = (present_pet, since, timestamp)
 
 
 # Singleton

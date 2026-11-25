@@ -9,6 +9,7 @@ import aiomqtt
 from ..config import settings
 from ..database import async_session
 from ..models import FeedingLog, SensorLog, AlertLog, DeviceState
+from .pet_meals import record_dispense
 from .push_service import send_push
 from .ws_manager import ws_manager
 
@@ -98,7 +99,9 @@ async def _handle_message(topic: str, payload: str):
 
         elif suffix == "event":
             event_type = data.get("type", "unknown")
-            if event_type in ("fed", "skipped"):
+            if event_type == "pet_feed_result":
+                await record_dispense(session, data)
+            elif event_type in ("fed", "skipped"):
                 src = data.get("src", "unknown")
                 grams = data.get("g", 0)
                 session.add(FeedingLog(

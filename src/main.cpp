@@ -128,7 +128,8 @@ static void publishFeedingResult(FeedSource src, FeedResult res, float actual) {
 // ─────────────────────────────────────────────
 //  Thực hiện nhả
 // ─────────────────────────────────────────────
-static void doFeed(float targetGrams, FeedSource src, int schedIdx) {
+static void doFeed(float targetGrams, FeedSource src, int schedIdx,
+                   const char* petRequestId = nullptr) {
     NVSData& d  = nvsGet();
     float    bowlNow = getBowlGrams();
 
@@ -144,14 +145,19 @@ static void doFeed(float targetGrams, FeedSource src, int schedIdx) {
     if (needed <= 0) {
         if (schedIdx >= 0) scheduleMarkFired(schedIdx);
         logEvent("skipped", src, 0);
+        if (petRequestId) notifyPetFeedResult(petRequestId, 0, "bowl_full");
         return;
     }
-    if (needed > DAILY_MAX_GRAMS - d.dailyGrams) return;
+    if (needed > DAILY_MAX_GRAMS - d.dailyGrams) {
+        if (petRequestId) notifyPetFeedResult(petRequestId, 0, "daily_grams_limit");
+        return;
+    }
 
     // Stale lock
     if (stalenessScore() >= STALE_SCORE_LOCK) {
         Serial.println(">> Khong nha: thuc an cu con trong bat (thiu)");
         logEvent("skipped", src, 0);
+        if (petRequestId) notifyPetFeedResult(petRequestId, 0, "stale_food_lock");
         return;
     }
 
@@ -182,6 +188,10 @@ static void doFeed(float targetGrams, FeedSource src, int schedIdx) {
     if (schedIdx >= 0) scheduleMarkFired(schedIdx);
 
     publishFeedingResult(src, res, actual);
+    if (petRequestId) {
+        const char* reasons[] = {"ok", "jam", "bridge", "timeout"};
+        notifyPetFeedResult(petRequestId, actual, reasons[res]);
+    }
 
     if (res == FEED_OK) {
         logEvent("fed", src, actual);
@@ -444,6 +454,14 @@ void loop() {
     notifyLoop();
     publishStatePeriodic();
 
+    if (state != ST_IDLE) {
+        float grams;
+        char requestId[64];
+        if (notifyTakePetFeed(grams, requestId)) {
+            notifyPetFeedResult(requestId, 0, state == ST_TIME_SYNC ? "time_not_ready" : "device_not_idle");
+        }
+    }
+
     // ── State machine ────────────────────────
     switch (state) {
 
@@ -462,6 +480,21 @@ void loop() {
             checkEnvironment();
 
             // 1. Kiểm tra lịch
+            float petGrams;
+            char requestId[64];
+            if (notifyTakePetFeed(petGrams, requestId)) {
+                const float bowl = getBowlGrams();
+                if (state != ST_IDLE) {
+                    notifyPetFeedResult(requestId, 0, "device_not_idle");
+                } else if (bowl >= BOWL_EMPTY_G || bowl >= petGrams * BOWL_SKIP_RATIO) {
+                    notifyPetFeedResult(requestId, 0, "bowl_full");
+                } else if (!canFeed(SRC_REMOTE)) {
+                    notifyPetFeedResult(requestId, 0, "daily_limit");
+                } else {
+                    doFeed(petGrams, SRC_REMOTE, -1, requestId);
+                }
+                break;
+            }
             int idx = scheduleCheck();
             if (idx >= 0 && isPetPresent() && canFeedVision()) {
                 Meal* meals = scheduleGet();

@@ -11,6 +11,7 @@ class ScheduleCreate(BaseModel):
     minute: int = Field(ge=0, le=59)
     grams: float = Field(30.0, ge=1, le=150, allow_inf_nan=False)
     enabled: bool = True
+    pet_id: int | None = Field(None, gt=0)
 
 
 class ScheduleUpdate(BaseModel):
@@ -26,6 +27,18 @@ class ScheduleOut(BaseModel):
     minute: int
     grams: float
     enabled: bool
+    pet_id: int | None = None
+    model_config = {"from_attributes": True}
+
+
+class PetMealOut(BaseModel):
+    id: str
+    pet_id: int
+    scheduled_at: datetime
+    dispensed_at: datetime | None
+    eaten_at: datetime | None
+    grams: float
+    status: str
     model_config = {"from_attributes": True}
 
 

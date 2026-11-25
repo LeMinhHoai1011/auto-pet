@@ -98,6 +98,7 @@ select,input[type=text],input[type=number]{font:inherit;padding:6px 10px;border:
       <span style="font-size:12px;color:var(--fg-muted)">|</span>
       <button class="btn btn-secondary" onclick="identifyFromFile()">Identify Image</button>
       <input type="file" id="id-file" accept="image/*" style="display:none" onchange="doIdentifyFile(this)">
+      <button class="btn btn-accent" id="id-photo-feed" style="display:none" hidden>Xác nhận nhả thật</button>
     </div>
   </div>
 
@@ -179,6 +180,7 @@ select,input[type=text],input[type=number]{font:inherit;padding:6px 10px;border:
 
 <div id="toast" class="toast"></div>
 
+<script src="/photo-feed.js"></script>
 <script>
 (function(){
   const API = '';
@@ -231,7 +233,15 @@ select,input[type=text],input[type=number]{font:inherit;padding:6px 10px;border:
 
   async function pollStatus(){
     try{
-      const s=await api('/api/recognition/status');
+      const r=await fetch('/api/recognition/status');
+      if(r.status===503){
+        const err=await r.json();
+        const badge=document.getElementById('ai-status');
+        badge.textContent='BLOCKED';badge.className='badge badge-bad';
+        document.getElementById('device-info').textContent=err.detail||'PyTorch unavailable';
+        return;
+      }
+      const s=await r.json();
       document.getElementById('s-fps').textContent=s.fps.toFixed(1);
       document.getElementById('s-aifps').textContent=s.ai_fps.toFixed(1);
       document.getElementById('s-ms').textContent=s.process_time_ms.toFixed(0);
@@ -313,13 +323,17 @@ select,input[type=text],input[type=number]{font:inherit;padding:6px 10px;border:
   window.identifyFromFile = function(){document.getElementById('id-file').click()};
   window.doIdentifyFile = async function(input){
     const f=input.files[0];if(!f)return;input.value='';
+    const feedButton=document.getElementById('id-photo-feed');
+    configurePhotoFeed(feedButton);
     const fd=new FormData();fd.append('file',f);
     const box=document.getElementById('id-results');box.style.display='block';
     document.getElementById('id-results-body').innerHTML='Analyzing...';
     try{
       const r=await fetch('/api/recognition/identify',{method:'POST',body:fd});
       const data=await r.json();
-      if(data.status==='NO_CAT'){
+      if(!r.ok)throw new Error(typeof data.detail==='string' ? data.detail : 'Không nhận diện được ảnh');
+      configurePhotoFeed(feedButton,f,data,toast);
+      if(data.status==='NO_CAT'||data.status==='NO_PET'){
         document.getElementById('id-results-body').innerHTML='<p>No cat detected in image.</p>';return;
       }
       let html='<p>'+data.detections+' cat(s) found:</p>';
